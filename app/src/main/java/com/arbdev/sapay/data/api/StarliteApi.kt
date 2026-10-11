@@ -1,6 +1,7 @@
 package com.arbdev.sapay.data.api
 
 import com.arbdev.sapay.data.model.*
+import kotlinx.serialization.json.JsonElement
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -63,7 +64,7 @@ interface StarliteApi {
     @GET("app/auth/profile")
     suspend fun getProfile(
         @Header("Authorization") token: String
-    ): Response<ProfileResponse>
+    ): Response<JsonElement>
 
     @GET("app/billing/history-billing")
     suspend fun getBillingHistory(
