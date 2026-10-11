@@ -39,7 +39,7 @@ interface StarliteApi {
     @POST("app/transaction/check-payment-status")
     suspend fun checkPaymentStatus(
         @Body request: CheckStatusRequest
-    ): Response<CheckStatusResponse>
+    ): Response<JsonElement>
 
     @POST("app/auth/check-password")
     suspend fun checkPassword(

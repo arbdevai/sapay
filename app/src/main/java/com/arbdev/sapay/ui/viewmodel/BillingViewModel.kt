@@ -252,37 +252,62 @@ class BillingViewModel(
 
     fun checkPaymentStatus(trxCode: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isCheckingStatus = true)
-            val result = repository.checkPaymentStatus(trxCode)
-            result.fold(
-                onSuccess = {
-                    val customerId = _uiState.value.customerInfo?.id
-                    if (!customerId.isNullOrBlank()) {
-                        val refreshed = repository.getCurrentPayment(customerId)
-                        refreshed.onSuccess { active ->
-                            if (active.paymentStatus == "settle") {
-                                _uiState.value = _uiState.value.copy(
-                                    isCheckingStatus = false,
-                                    isPaymentSuccess = true,
-                                    currentPayment = active,
-                                    statusMessage = "Pembayaran Berhasil! Tagihan telah lunas."
-                                )
-                                return@launch
-                            }
-                        }
+            _uiState.value = _uiState.value.copy(isCheckingStatus = true, errorMessage = null)
+            val currentPay = _uiState.value.currentPayment
+            val customer = _uiState.value.customerInfo
+            val targetTrx = trxCode.ifBlank { currentPay?.trxCode ?: "" }
+            val customerId = currentPay?.customerIdString
+                ?: customer?.id
+                ?: ""
+            val customerQuery = customer?.customerId
+                ?: customer?.phoneNumber
+                ?: _uiState.value.queryInput.trim()
+
+            // 1. Call official check-payment-status API with trx_code and customer_id
+            val statusResult = repository.checkPaymentStatus(targetTrx, customerId)
+            var settled = statusResult.getOrNull()?.isSettled == true
+
+            // 2. Also check current-payment transaction
+            if (!settled && customerId.isNotBlank()) {
+                val currentResult = repository.getCurrentPayment(customerId)
+                currentResult.onSuccess { active ->
+                    if (active.paymentStatus.equals("settle", ignoreCase = true) ||
+                        active.paymentStatus.equals("success", ignoreCase = true)
+                    ) {
+                        settled = true
+                        _uiState.value = _uiState.value.copy(currentPayment = active)
                     }
-                    _uiState.value = _uiState.value.copy(
-                        isCheckingStatus = false,
-                        statusMessage = "Status diperbarui. Menunggu konfirmasi pembayaran."
-                    )
-                },
-                onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isCheckingStatus = false,
-                        errorMessage = error.message ?: "Belum ada konfirmasi pembayaran baru"
-                    )
                 }
-            )
+            }
+
+            // 3. Fallback verification via bill check if transaction is closed or settled
+            if (!settled && customerQuery.isNotBlank()) {
+                val billResult = repository.checkBill(customerQuery)
+                billResult.onSuccess { billResp ->
+                    val msg = billResp.message?.lowercase() ?: ""
+                    if (msg.contains("lunas") || msg.contains("tidak ada tagihan")) {
+                        settled = true
+                    }
+                }
+            }
+
+            if (settled) {
+                _uiState.value = _uiState.value.copy(
+                    isCheckingStatus = false,
+                    isPaymentSuccess = true,
+                    statusMessage = "Pembayaran Berhasil! Tagihan Anda telah lunas."
+                )
+            } else {
+                val errMsg = statusResult.exceptionOrNull()?.message
+                _uiState.value = _uiState.value.copy(
+                    isCheckingStatus = false,
+                    statusMessage = if (errMsg.isNullOrBlank()) {
+                        "Status diperbarui. Pembayaran belum terkonfirmasi, silakan selesaikan pembayaran."
+                    } else {
+                        errMsg
+                    }
+                )
+            }
         }
     }
 

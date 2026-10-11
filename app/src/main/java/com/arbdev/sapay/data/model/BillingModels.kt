@@ -149,9 +149,20 @@ data class CurrentPaymentResult(
     @SerialName("grand_total") val grandTotal: Double? = null,
     @SerialName("payment_number") val paymentNumber: String? = null,
     @SerialName("payment_code") val paymentCode: String? = null,
+    @SerialName("customer_id") val customerIdRaw: JsonElement? = null,
     @SerialName("va") val va: VaDetail? = null,
     @SerialName("payment_payload") val paymentPayload: PaymentPayload? = null
-)
+) {
+    val customerIdString: String?
+        get() {
+            val raw = customerIdRaw
+            return when {
+                raw is kotlinx.serialization.json.JsonObject -> raw["id"]?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null }
+                raw is kotlinx.serialization.json.JsonPrimitive && raw.isString -> raw.content
+                else -> null
+            }
+        }
+}
 
 @Serializable
 data class CurrentPaymentResponse(
@@ -162,12 +173,21 @@ data class CurrentPaymentResponse(
 
 @Serializable
 data class CheckStatusRequest(
-    @SerialName("trx_code") val trxCode: String
+    @SerialName("trx_code") val trxCode: String,
+    @SerialName("customer_id") val customerId: String
 )
 
 @Serializable
 data class CheckStatusResponse(
     @SerialName("statusCode") val statusCode: Int? = null,
     @SerialName("message") val message: String? = null,
-    @SerialName("result") val result: JsonElement? = null
+    @SerialName("result") val result: JsonElement? = null,
+    @SerialName("data") val data: JsonElement? = null,
+    @SerialName("payment_status") val paymentStatus: String? = null
+)
+
+data class PaymentCheckStatusResult(
+    val isSettled: Boolean,
+    val paymentStatus: String? = null,
+    val message: String? = null
 )

@@ -2,6 +2,8 @@ package com.arbdev.sapay.data.repository
 
 import com.arbdev.sapay.data.api.StarliteApi
 import com.arbdev.sapay.data.model.*
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -107,13 +109,39 @@ class BillingRepository(private val api: StarliteApi) {
         }
     }
 
-    suspend fun checkPaymentStatus(trxCode: String): Result<Boolean> {
+    suspend fun checkPaymentStatus(trxCode: String, customerId: String): Result<PaymentCheckStatusResult> {
         return try {
-            val response = api.checkPaymentStatus(CheckStatusRequest(trxCode = trxCode))
-            if (response.isSuccessful) {
-                Result.success(true)
+            val response = api.checkPaymentStatus(
+                CheckStatusRequest(
+                    trxCode = trxCode,
+                    customerId = customerId
+                )
+            )
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                val rootObj = body as? JsonObject
+                val status = rootObj?.get("payment_status")?.let { if (it is JsonPrimitive) it.content else null }
+                    ?: rootObj?.get("data")?.let {
+                        if (it is JsonObject) it["payment_status"]?.let { p -> if (p is JsonPrimitive) p.content else null }
+                        else if (it is JsonPrimitive) it.content else null
+                    }
+                    ?: rootObj?.get("result")?.let {
+                        if (it is JsonObject) it["payment_status"]?.let { p -> if (p is JsonPrimitive) p.content else null }
+                        else if (it is JsonPrimitive) it.content else null
+                    }
+                val isSettle = status?.equals("settle", ignoreCase = true) == true ||
+                        status?.equals("success", ignoreCase = true) == true ||
+                        status?.equals("paid", ignoreCase = true) == true
+                Result.success(
+                    PaymentCheckStatusResult(
+                        isSettled = isSettle,
+                        paymentStatus = status,
+                        message = rootObj?.get("message")?.let { if (it is JsonPrimitive) it.content else null }
+                    )
+                )
             } else {
-                Result.failure(Exception("Gagal verifikasi status pembayaran"))
+                val errorMsg = parseErrorMessage(response.errorBody()?.string())
+                Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
             Result.failure(e)

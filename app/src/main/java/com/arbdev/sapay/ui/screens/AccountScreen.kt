@@ -739,23 +739,18 @@ fun UserProfileDetailsCard(
             // Expiry Date & Remaining Days (Persis seperti di web Starlite)
             val expireDateStr = profile.activePackageExpireDate
             var daysRemaining = "-"
-            var formattedDueDate = "-"
+            val formattedDueDate = formatIndonesianDate(expireDateStr, withTime = false)
 
             if (!expireDateStr.isNullOrBlank()) {
                 try {
                     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
                     val expireDate = sdf.parse(expireDateStr.substring(0, 10))
                     if (expireDate != null) {
-                        val displayFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
-                        formattedDueDate = displayFormat.format(expireDate)
-
                         val diff = expireDate.time - System.currentTimeMillis()
                         val days = TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS) + 1
                         daysRemaining = if (days >= 0) "$days Hari" else "Lewat Jatuh Tempo"
                     }
-                } catch (_: Exception) {
-                    formattedDueDate = expireDateStr
-                }
+                } catch (_: Exception) {}
             }
 
             Row(
@@ -836,7 +831,7 @@ fun WebHistoryItemCard(
             val isPaid = item.isPaid == true
 
             // Date & Status calculation
-            var formattedDueDate = item.dueDate ?: "-"
+            val formattedDueDate = formatIndonesianDate(item.dueDate, withTime = false)
             var isLate = false
 
             if (!item.dueDate.isNullOrBlank()) {
@@ -844,15 +839,14 @@ fun WebHistoryItemCard(
                     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
                     val date = sdf.parse(item.dueDate.substring(0, 10))
                     if (date != null) {
-                        val displayFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
-                        formattedDueDate = displayFormat.format(date)
                         isLate = Date().after(date)
                     }
                 } catch (_: Exception) {}
             }
 
-            // Settlement date if paid
-            val settlement = item.transactionList.firstOrNull { it.paymentStatus == "settle" }?.settlementDate
+            // Settlement date if paid (formatted with Indonesian full month name e.g. 11 Oktober 2026, 14:30 WIB)
+            val settlementRaw = item.transactionList.firstOrNull { it.paymentStatus == "settle" }?.settlementDate
+            val formattedSettlement = formatIndonesianDate(settlementRaw, withTime = true)
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -905,10 +899,11 @@ fun WebHistoryItemCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            if (isPaid && !settlement.isNullOrBlank()) {
+            if (isPaid && !settlementRaw.isNullOrBlank()) {
                 Text(
-                    text = "Sudah dibayarkan pada $settlement",
+                    text = "Lunas dibayarkan pada $formattedSettlement",
                     style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
                     color = SuccessGreen
                 )
             } else {
@@ -941,5 +936,53 @@ fun WebHistoryItemCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * Format string tanggal (ISO-8601, Timestamp, atau YYYY-MM-DD)
+ * menjadi format bahasa Indonesia resmi dengan nama bulan lengkap
+ * Contoh: "11 Oktober 2026, 15:45 WIB" atau "11 Oktober 2026"
+ */
+fun formatIndonesianDate(rawDateStr: String?, withTime: Boolean = true): String {
+    if (rawDateStr.isNullOrBlank()) return "-"
+    val formats = listOf(
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") },
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") },
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US),
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
+        SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    )
+
+    for (sdf in formats) {
+        try {
+            val date = sdf.parse(rawDateStr)
+            if (date != null) {
+                val hasTime = rawDateStr.contains("T") || rawDateStr.contains(":")
+                val pattern = if (withTime && hasTime) {
+                    "dd MMMM yyyy, HH:mm 'WIB'"
+                } else {
+                    "dd MMMM yyyy"
+                }
+                val outputFormat = SimpleDateFormat(pattern, Locale("id", "ID")).apply {
+                    if (hasTime) {
+                        timeZone = java.util.TimeZone.getTimeZone("Asia/Jakarta")
+                    }
+                }
+                return outputFormat.format(date)
+            }
+        } catch (_: Exception) {}
+    }
+
+    // Fallback: jika dimulai dengan YYYY-MM-DD
+    return try {
+        if (rawDateStr.length >= 10 && rawDateStr[4] == '-' && rawDateStr[7] == '-') {
+            val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(rawDateStr.substring(0, 10))
+            if (date != null) {
+                SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID")).format(date)
+            } else rawDateStr
+        } else rawDateStr
+    } catch (_: Exception) {
+        rawDateStr
     }
 }
