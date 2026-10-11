@@ -499,3 +499,26 @@ fun ConfirmationDataCard(
         }
     }
 }
+
+@Composable
+fun DetailItem(label: String, value: String, isHighlight: Boolean = false) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextSecondary
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (isHighlight) FontWeight.Bold else FontWeight.SemiBold,
+            color = if (isHighlight) PrimaryBlue else TextPrimary
+        )
+    }
+}
+
