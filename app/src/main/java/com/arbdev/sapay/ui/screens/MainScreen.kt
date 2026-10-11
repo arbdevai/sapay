@@ -1,17 +1,32 @@
 package com.arbdev.sapay.ui.screens
 
-import androidx.compose.foundation.layout.padding
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateColorAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import com.arbdev.sapay.ui.theme.CardSurface
-import com.arbdev.sapay.ui.theme.PrimaryBlue
-import com.arbdev.sapay.ui.theme.TextSecondary
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.arbdev.sapay.ui.theme.*
 import com.arbdev.sapay.ui.viewmodel.AuthViewModel
 import com.arbdev.sapay.ui.viewmodel.BillingViewModel
 import com.arbdev.sapay.ui.viewmodel.UpdateViewModel
@@ -37,6 +52,11 @@ fun MainScreen(
 
     var selectedTab by remember { mutableStateOf(MainTab.BILLING) }
     var currentSubScreen by remember { mutableStateOf(BillingSubScreen.DASHBOARD) }
+
+    // System Back Gesture handling: returns to dashboard if in subscreen
+    BackHandler(enabled = currentSubScreen != BillingSubScreen.DASHBOARD) {
+        currentSubScreen = BillingSubScreen.DASHBOARD
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -65,64 +85,21 @@ fun MainScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        bottomBar = {
-            if (currentSubScreen == BillingSubScreen.DASHBOARD || selectedTab == MainTab.ACCOUNT) {
-                NavigationBar(
-                    containerColor = CardSurface
-                ) {
-                    NavigationBarItem(
-                        selected = selectedTab == MainTab.BILLING,
-                        onClick = {
-                            selectedTab = MainTab.BILLING
-                            currentSubScreen = BillingSubScreen.DASHBOARD
-                        },
-                        icon = {
-                            Icon(Icons.Default.ReceiptLong, contentDescription = "Cek Tagihan")
-                        },
-                        label = {
-                            Text(
-                                "Cek Tagihan",
-                                fontWeight = if (selectedTab == MainTab.BILLING) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = PrimaryBlue,
-                            selectedTextColor = PrimaryBlue,
-                            unselectedIconColor = TextSecondary,
-                            unselectedTextColor = TextSecondary
-                        )
-                    )
-
-                    NavigationBarItem(
-                        selected = selectedTab == MainTab.ACCOUNT,
-                        onClick = {
-                            selectedTab = MainTab.ACCOUNT
-                            if (authState.isLoggedIn && authState.profile == null) {
-                                authViewModel.loadProfileAndHistory()
-                            }
-                        },
-                        icon = {
-                            Icon(Icons.Default.AccountCircle, contentDescription = "Akun Starlite")
-                        },
-                        label = {
-                            Text(
-                                "Akun Starlite",
-                                fontWeight = if (selectedTab == MainTab.ACCOUNT) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = PrimaryBlue,
-                            selectedTextColor = PrimaryBlue,
-                            unselectedIconColor = TextSecondary,
-                            unselectedTextColor = TextSecondary
-                        )
-                    )
-                }
-            }
-        }
+        containerColor = BackgroundLight
     ) { paddingValues ->
-        Surface(modifier = Modifier.padding(paddingValues)) {
-            when (selectedTab) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            val showNavBar = currentSubScreen == BillingSubScreen.DASHBOARD || selectedTab == MainTab.ACCOUNT
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = if (showNavBar) 84.dp else 0.dp)
+            ) {
+                when (selectedTab) {
                 MainTab.BILLING -> {
                     when (currentSubScreen) {
                         BillingSubScreen.DASHBOARD -> {
@@ -214,6 +191,24 @@ fun MainScreen(
                     )
                 }
             }
+
+            // Floating Capsule Navigation Bar (Animated Pill)
+            if (showNavBar) {
+                FloatingCapsuleNavBar(
+                    selectedTab = selectedTab,
+                    onTabSelected = { tab ->
+                        selectedTab = tab
+                        if (tab == MainTab.BILLING) {
+                            currentSubScreen = BillingSubScreen.DASHBOARD
+                        } else if (tab == MainTab.ACCOUNT) {
+                            if (authState.isLoggedIn && authState.profile == null) {
+                                authViewModel.loadProfileAndHistory()
+                            }
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
         }
     }
 
@@ -224,5 +219,107 @@ fun MainScreen(
             onDismiss = { updateViewModel.showChangelog(false) },
             onUpdateClick = { updateViewModel.startDownloadAndInstall(context) }
         )
+    }
+}
+
+@Composable
+fun FloatingCapsuleNavBar(
+    selectedTab: MainTab,
+    onTabSelected: (MainTab) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .padding(horizontal = 24.dp, vertical = 18.dp)
+            .shadow(
+                elevation = 14.dp,
+                shape = CircleShape,
+                spotColor = PrimaryBlue.copy(alpha = 0.3f),
+                ambientColor = PrimaryBlue.copy(alpha = 0.12f)
+            ),
+        shape = CircleShape,
+        color = CardSurface,
+        border = BorderStroke(1.dp, BorderColor.copy(alpha = 0.7f))
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 8.dp, vertical = 7.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FloatingNavItem(
+                selected = selectedTab == MainTab.BILLING,
+                onClick = { onTabSelected(MainTab.BILLING) },
+                icon = Icons.Default.ReceiptLong,
+                label = "Cek Tagihan"
+            )
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            FloatingNavItem(
+                selected = selectedTab == MainTab.ACCOUNT,
+                onClick = { onTabSelected(MainTab.ACCOUNT) },
+                icon = Icons.Default.AccountCircle,
+                label = "Akun Starlite"
+            )
+        }
+    }
+}
+
+@Composable
+private fun FloatingNavItem(
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: ImageVector,
+    label: String
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) PrimaryBlueLight else Color.Transparent,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "navBg"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) PrimaryBlueDark else TextSecondary,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "navContent"
+    )
+
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(bgColor)
+            .clickable(onClick = onClick)
+            .animateContentSize(animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow))
+            .padding(horizontal = if (selected) 18.dp else 14.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = contentColor,
+                modifier = Modifier.size(22.dp)
+            )
+
+            AnimatedVisibility(
+                visible = selected,
+                enter = fadeIn(animationSpec = tween(180)) + expandHorizontally(animationSpec = tween(220)),
+                exit = fadeOut(animationSpec = tween(150)) + shrinkHorizontally(animationSpec = tween(200))
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = label,
+                        color = contentColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
     }
 }

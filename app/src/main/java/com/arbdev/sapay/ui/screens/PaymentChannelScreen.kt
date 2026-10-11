@@ -1,5 +1,6 @@
 package com.arbdev.sapay.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,7 +9,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -33,6 +33,7 @@ fun PaymentChannelScreen(
     onConfirmPayment: () -> Unit,
     onRetry: () -> Unit = {}
 ) {
+    BackHandler(onBack = onBackClick)
     Scaffold(
         topBar = {
             TopAppBar(
@@ -42,15 +43,6 @@ fun PaymentChannelScreen(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Kembali",
-                            tint = Color.White
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = PrimaryBlue
@@ -147,25 +139,21 @@ fun PaymentChannelScreen(
                                 modifier = Modifier.padding(horizontal = 8.dp)
                             )
                             Spacer(modifier = Modifier.height(20.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            Button(
+                                onClick = onRetry,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
                             ) {
-                                OutlinedButton(
-                                    onClick = onBackClick,
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Kembali")
-                                }
-                                Button(
-                                    onClick = onRetry,
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Coba Lagi")
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Coba Muat Ulang", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
