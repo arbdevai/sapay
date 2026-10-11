@@ -3,7 +3,6 @@ package com.arbdev.sapay.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -191,25 +190,26 @@ fun MainScreen(
                     )
                 }
             }
-
-            // Floating Capsule Navigation Bar (Animated Pill)
-            if (showNavBar) {
-                FloatingCapsuleNavBar(
-                    selectedTab = selectedTab,
-                    onTabSelected = { tab ->
-                        selectedTab = tab
-                        if (tab == MainTab.BILLING) {
-                            currentSubScreen = BillingSubScreen.DASHBOARD
-                        } else if (tab == MainTab.ACCOUNT) {
-                            if (authState.isLoggedIn && authState.profile == null) {
-                                authViewModel.loadProfileAndHistory()
-                            }
-                        }
-                    },
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                )
-            }
         }
+
+        // Floating Capsule Navigation Bar (Animated Pill)
+        if (showNavBar) {
+            FloatingCapsuleNavBar(
+                selectedTab = selectedTab,
+                onTabSelected = { tab ->
+                    selectedTab = tab
+                    if (tab == MainTab.BILLING) {
+                        currentSubScreen = BillingSubScreen.DASHBOARD
+                    } else if (tab == MainTab.ACCOUNT) {
+                        if (authState.isLoggedIn && authState.profile == null) {
+                            authViewModel.loadProfileAndHistory()
+                        }
+                    }
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+    }
     }
 
     // In-App Update Changelog Modal
