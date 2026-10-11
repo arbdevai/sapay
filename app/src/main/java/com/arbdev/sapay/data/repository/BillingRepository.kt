@@ -17,11 +17,11 @@ class BillingRepository(private val api: StarliteApi) {
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
-                val errorMsg = parseErrorMessage(response.errorBody()?.string())
+                val errorMsg = parseApiError(response.code(), response.errorBody()?.string())
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(formatNetworkException(e))
         }
     }
 
@@ -32,11 +32,11 @@ class BillingRepository(private val api: StarliteApi) {
             if (response.isSuccessful || response.code() == 201) {
                 Result.success(true)
             } else {
-                val errorMsg = parseErrorMessage(response.errorBody()?.string())
+                val errorMsg = parseApiError(response.code(), response.errorBody()?.string())
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(formatNetworkException(e))
         }
     }
 
@@ -53,7 +53,7 @@ class BillingRepository(private val api: StarliteApi) {
                 Result.success(emptyList())
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(formatNetworkException(e))
         }
     }
 
@@ -63,11 +63,11 @@ class BillingRepository(private val api: StarliteApi) {
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!.data)
             } else {
-                val errorMsg = parseErrorMessage(response.errorBody()?.string())
+                val errorMsg = parseApiError(response.code(), response.errorBody()?.string())
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(formatNetworkException(e))
         }
     }
 
@@ -87,11 +87,11 @@ class BillingRepository(private val api: StarliteApi) {
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
-                val errorMsg = parseErrorMessage(response.errorBody()?.string())
+                val errorMsg = parseApiError(response.code(), response.errorBody()?.string())
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(formatNetworkException(e))
         }
     }
 
@@ -101,11 +101,11 @@ class BillingRepository(private val api: StarliteApi) {
             if (response.isSuccessful && response.body()?.result != null) {
                 Result.success(response.body()!!.result!!)
             } else {
-                val errorMsg = parseErrorMessage(response.errorBody()?.string())
+                val errorMsg = parseApiError(response.code(), response.errorBody()?.string())
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(formatNetworkException(e))
         }
     }
 
@@ -140,21 +140,52 @@ class BillingRepository(private val api: StarliteApi) {
                     )
                 )
             } else {
-                val errorMsg = parseErrorMessage(response.errorBody()?.string())
+                val errorMsg = parseApiError(response.code(), response.errorBody()?.string())
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(formatNetworkException(e))
         }
     }
 
-    private fun parseErrorMessage(errorBody: String?): String {
-        if (errorBody.isNullOrBlank()) return "Terjadi kesalahan pada server"
-        return try {
-            val json = JSONObject(errorBody)
-            json.optString("message", "Terjadi kesalahan")
-        } catch (_: Exception) {
-            "Terjadi kesalahan: $errorBody"
+    private fun parseApiError(responseCode: Int, errorBody: String?): String {
+        when (responseCode) {
+            502, 503, 504 -> return "Server Starlite sedang dalam pemeliharaan (Maintenance). Silakan coba beberapa saat lagi."
+            500 -> return "Terjadi gangguan sistem pada server Starlite. Silakan coba kembali sesaat lagi."
+            401, 403 -> return "Akses ke server Starlite dibatasi atau sesi telah berakhir. Silakan coba kembali."
+            404 -> return "Layanan Starlite yang diminta tidak ditemukan."
         }
+
+        if (errorBody.isNullOrBlank()) {
+            return "Terjadi kendala pada server (Status: $responseCode)"
+        }
+
+        val trimmed = errorBody.trim()
+        if (trimmed.startsWith("<") || trimmed.contains("<html", ignoreCase = true) ||
+            trimmed.contains("bad gateway", ignoreCase = true) || trimmed.contains("cloudflare", ignoreCase = true)) {
+            return "Server Starlite sedang dalam pemeliharaan (Maintenance). Silakan coba beberapa saat lagi."
+        }
+
+        return try {
+            val json = JSONObject(trimmed)
+            json.optString("message", json.optString("error", "Gagal memproses permintaan"))
+        } catch (_: Exception) {
+            "Gagal memproses respons dari server Starlite"
+        }
+    }
+
+    private fun formatNetworkException(e: Throwable): Exception {
+        val msg = e.message ?: ""
+        val friendlyMessage = when {
+            e is java.net.SocketTimeoutException -> "Koneksi ke server Starlite terputus (Timeout). Periksa sinyal internet Anda."
+            e is java.net.UnknownHostException || e is java.net.ConnectException -> "Tidak dapat terhubung ke server Starlite. Periksa koneksi internet Anda."
+            msg.contains("502") || msg.contains("503") || msg.contains("504") || msg.contains("Bad Gateway", ignoreCase = true) ->
+                "Server Starlite sedang dalam pemeliharaan (Maintenance). Silakan coba beberapa saat lagi."
+            msg.contains("Unexpected JSON", ignoreCase = true) ->
+                "Format data dari server Starlite sedang disesuaikan. Silakan coba kembali nanti."
+            msg.isNotBlank() -> msg
+            else -> "Terjadi kendala jaringan. Silakan coba beberapa saat lagi."
+        }
+        return Exception(friendlyMessage, e)
     }
 }

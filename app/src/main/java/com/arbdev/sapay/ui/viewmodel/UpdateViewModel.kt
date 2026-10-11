@@ -11,13 +11,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 
 data class UpdateUiState(
     val latestRelease: GitHubRelease? = null,
     val showChangelogDialog: Boolean = false,
     val isChecking: Boolean = false,
     val updateAvailable: Boolean = false,
-    val infoMessage: String? = null
+    val infoMessage: String? = null,
+    val isDownloading: Boolean = false,
+    val downloadProgress: Float = 0f,
+    val isDownloaded: Boolean = false,
+    val downloadedApkFile: File? = null,
+    val downloadError: String? = null
 )
 
 class UpdateViewModel(
@@ -55,9 +61,28 @@ class UpdateViewModel(
                 onFailure = {
                     _uiState.value = _uiState.value.copy(
                         isChecking = false,
-                        infoMessage = if (manual) "Gagal memeriksa pembaruan" else null
+                        infoMessage = if (manual) "Gagal memeriksa pembaruan: Periksa koneksi internet." else null
                     )
                 }
+            )
+        }
+    }
+
+    fun syncExistingDownload(context: Context) {
+        val release = _uiState.value.latestRelease ?: return
+        val updater = InAppUpdater(context)
+        val existing = updater.getExistingDownloadedApk(release.tagName)
+        if (existing != null) {
+            _uiState.value = _uiState.value.copy(
+                isDownloaded = true,
+                downloadedApkFile = existing,
+                downloadProgress = 1.0f,
+                downloadError = null
+            )
+        } else {
+            _uiState.value = _uiState.value.copy(
+                isDownloaded = false,
+                downloadedApkFile = null
             )
         }
     }
@@ -67,12 +92,73 @@ class UpdateViewModel(
     }
 
     fun startDownloadAndInstall(context: Context) {
-        val release = _uiState.value.latestRelease ?: return
+        val state = _uiState.value
+        val release = state.latestRelease ?: return
         val apkAsset = release.assets.firstOrNull { it.name.endsWith(".apk") } ?: return
-
         val updater = InAppUpdater(context)
-        updater.downloadAndInstall(apkAsset.downloadUrl, release.tagName)
-        _uiState.value = _uiState.value.copy(showChangelogDialog = false)
+
+        // 1. Antisipasi Dobel Download jika proses sedang berjalan
+        if (state.isDownloading) {
+            _uiState.value = state.copy(infoMessage = "Pembaruan sedang diunduh, mohon tunggu...")
+            return
+        }
+
+        // 2. Jika sudah pernah terunduh dan file valid, langsung instal (tanpa download ulang)
+        val existing = state.downloadedApkFile ?: updater.getExistingDownloadedApk(release.tagName)
+        if (existing != null && existing.exists() && existing.length() > 5 * 1024 * 1024) {
+            _uiState.value = state.copy(
+                isDownloaded = true,
+                downloadedApkFile = existing,
+                downloadProgress = 1.0f
+            )
+            updater.installApk(existing) { error ->
+                _uiState.value = _uiState.value.copy(downloadError = error, infoMessage = error)
+            }
+            return
+        }
+
+        // 3. Jalankan proses pengunduhan via coroutine streaming
+        viewModelScope.launch {
+            _uiState.value = state.copy(
+                isDownloading = true,
+                downloadProgress = 0f,
+                downloadError = null,
+                isDownloaded = false,
+                downloadedApkFile = null
+            )
+
+            val downloadResult = updater.downloadApk(
+                apkUrl = apkAsset.downloadUrl,
+                versionTag = release.tagName,
+                onProgress = { progress ->
+                    _uiState.value = _uiState.value.copy(downloadProgress = progress)
+                }
+            )
+
+            downloadResult.fold(
+                onSuccess = { file ->
+                    _uiState.value = _uiState.value.copy(
+                        isDownloading = false,
+                        isDownloaded = true,
+                        downloadedApkFile = file,
+                        downloadProgress = 1.0f,
+                        downloadError = null
+                    )
+                    // Langsung picu pemasangan paket
+                    updater.installApk(file) { error ->
+                        _uiState.value = _uiState.value.copy(downloadError = error, infoMessage = error)
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isDownloading = false,
+                        isDownloaded = false,
+                        downloadError = error.message ?: "Gagal mengunduh pembaruan",
+                        infoMessage = error.message ?: "Gagal mengunduh pembaruan"
+                    )
+                }
+            )
+        }
     }
 
     fun clearInfoMessage() {

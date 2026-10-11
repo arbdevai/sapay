@@ -25,6 +25,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.arbdev.sapay.ui.components.InAppNotificationBanner
+import com.arbdev.sapay.ui.components.InAppNotificationData
+import com.arbdev.sapay.ui.components.NotificationType
 import com.arbdev.sapay.ui.theme.*
 import com.arbdev.sapay.ui.viewmodel.AuthViewModel
 import com.arbdev.sapay.ui.viewmodel.BillingViewModel
@@ -57,12 +60,19 @@ fun MainScreen(
         currentSubScreen = BillingSubScreen.DASHBOARD
     }
 
-    val snackbarHostState = remember { SnackbarHostState() }
+    var currentNotification by remember { mutableStateOf<InAppNotificationData?>(null) }
 
     LaunchedEffect(updateState.infoMessage) {
         val msg = updateState.infoMessage
         if (!msg.isNullOrBlank()) {
-            snackbarHostState.showSnackbar(msg)
+            val type = if (msg.contains("gagal", ignoreCase = true) || msg.contains("error", ignoreCase = true)) {
+                NotificationType.ERROR
+            } else if (msg.contains("terbaru", ignoreCase = true) || msg.contains("berhasil", ignoreCase = true)) {
+                NotificationType.SUCCESS
+            } else {
+                NotificationType.INFO
+            }
+            currentNotification = InAppNotificationData(message = msg, type = type)
             updateViewModel.clearInfoMessage()
         }
     }
@@ -70,20 +80,35 @@ fun MainScreen(
     LaunchedEffect(billingState.statusMessage) {
         val msg = billingState.statusMessage
         if (!msg.isNullOrBlank()) {
-            snackbarHostState.showSnackbar(msg)
+            val type = if (msg.contains("berhasil", ignoreCase = true) || msg.contains("lunas", ignoreCase = true)) {
+                NotificationType.SUCCESS
+            } else if (msg.contains("gagal", ignoreCase = true) || msg.contains("kesalahan", ignoreCase = true) ||
+                msg.contains("pemeliharaan", ignoreCase = true) || msg.contains("maintenance", ignoreCase = true)) {
+                NotificationType.ERROR
+            } else {
+                NotificationType.INFO
+            }
+            currentNotification = InAppNotificationData(message = msg, type = type)
         }
     }
 
     LaunchedEffect(authState.statusMessage) {
         val msg = authState.statusMessage
         if (!msg.isNullOrBlank()) {
-            snackbarHostState.showSnackbar(msg)
+            val type = if (msg.contains("berhasil", ignoreCase = true) || msg.contains("sukses", ignoreCase = true)) {
+                NotificationType.SUCCESS
+            } else if (msg.contains("gagal", ignoreCase = true) || msg.contains("salah", ignoreCase = true) ||
+                msg.contains("tidak cocok", ignoreCase = true)) {
+                NotificationType.ERROR
+            } else {
+                NotificationType.INFO
+            }
+            currentNotification = InAppNotificationData(message = msg, type = type)
             authViewModel.clearStatusMessage()
         }
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = BackgroundLight
     ) { paddingValues ->
         Box(
@@ -209,13 +234,32 @@ fun MainScreen(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
+
+        // Custom In-App Floating Notification Banner (Tanpa Notif Bawaan OS)
+        InAppNotificationBanner(
+            notification = currentNotification,
+            onDismiss = { currentNotification = null },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+        )
     }
+    }
+
+    LaunchedEffect(updateState.showChangelogDialog) {
+        if (updateState.showChangelogDialog) {
+            updateViewModel.syncExistingDownload(context)
+        }
     }
 
     // In-App Update Changelog Modal
     if (updateState.showChangelogDialog && updateState.latestRelease != null) {
         ChangelogModal(
             release = updateState.latestRelease!!,
+            isDownloading = updateState.isDownloading,
+            downloadProgress = updateState.downloadProgress,
+            isDownloaded = updateState.isDownloaded,
+            downloadError = updateState.downloadError,
             onDismiss = { updateViewModel.showChangelog(false) },
             onUpdateClick = { updateViewModel.startDownloadAndInstall(context) }
         )

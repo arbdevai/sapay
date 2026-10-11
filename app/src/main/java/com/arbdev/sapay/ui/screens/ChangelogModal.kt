@@ -1,11 +1,14 @@
 package com.arbdev.sapay.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -13,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,10 +27,16 @@ import com.arbdev.sapay.ui.theme.PrimaryBlue
 @Composable
 fun ChangelogModal(
     release: GitHubRelease,
+    isDownloading: Boolean = false,
+    downloadProgress: Float = 0f,
+    isDownloaded: Boolean = false,
+    downloadError: String? = null,
     onDismiss: () -> Unit,
     onUpdateClick: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = {
+        if (!isDownloading) onDismiss()
+    }) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -50,13 +58,16 @@ fun ChangelogModal(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(PrimaryBlue.copy(alpha = 0.12f)),
+                            .background(
+                                if (isDownloaded) Color(0xFF10B981).copy(alpha = 0.15f)
+                                else PrimaryBlue.copy(alpha = 0.12f)
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.SystemUpdate,
+                            imageVector = if (isDownloaded) Icons.Default.CheckCircle else Icons.Default.SystemUpdate,
                             contentDescription = null,
-                            tint = PrimaryBlue,
+                            tint = if (isDownloaded) Color(0xFF10B981) else PrimaryBlue,
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -65,7 +76,7 @@ fun ChangelogModal(
 
                     Column {
                         Text(
-                            text = "Pembaruan Tersedia!",
+                            text = if (isDownloaded) "Pembaruan Siap Dipasang!" else "Pembaruan Tersedia!",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -111,33 +122,125 @@ fun ChangelogModal(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                // Status Progres Unduhan
+                if (isDownloading) {
+                    Spacer(modifier = Modifier.height(18.dp))
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Mengunduh berkas APK...",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = PrimaryBlue
+                            )
+                            Text(
+                                text = "${(downloadProgress * 100).toInt()}%",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PrimaryBlue
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { downloadProgress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = PrimaryBlue,
+                            trackColor = PrimaryBlue.copy(alpha = 0.15f)
+                        )
+                    }
+                }
+
+                // Tampilan Error Unduhan
+                AnimatedVisibility(visible = !downloadError.isNullOrBlank() && !isDownloading) {
+                    Column {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = downloadError ?: "",
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
 
                 Button(
                     onClick = onUpdateClick,
+                    enabled = !isDownloading,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDownloaded) Color(0xFF10B981) else PrimaryBlue
+                    ),
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Text(
-                        text = "Perbarui Sekarang",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
+                    if (isDownloading) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Mengunduh...",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    } else if (isDownloaded) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Pasang Pembaruan",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    } else if (!downloadError.isNullOrBlank()) {
+                        Text(
+                            text = "Coba Unduh Ulang",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Unduh & Pasang Sekarang",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Nanti Saja",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                if (!isDownloading) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Nanti Saja",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }

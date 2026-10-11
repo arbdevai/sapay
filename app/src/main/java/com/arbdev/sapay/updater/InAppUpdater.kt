@@ -1,70 +1,168 @@
 package com.arbdev.sapay.updater
 
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
-import android.widget.Toast
+import android.provider.Settings
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.util.concurrent.TimeUnit
 
 class InAppUpdater(private val context: Context) {
 
-    fun downloadAndInstall(apkUrl: String, versionTag: String) {
-        val fileName = "sapay-$versionTag.apk"
-        val destinationFile = File(context.getExternalFilesDir(null), fileName)
+    private val httpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(180, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
+    }
 
-        if (destinationFile.exists()) {
-            destinationFile.delete()
-        }
+    /**
+     * Memeriksa apakah berkas APK untuk versi ini sudah pernah diunduh secara utuh sebelumnya.
+     * Mengembalikan File jika valid (> 5 MB), atau null jika belum ada / corrupt.
+     */
+    fun getExistingDownloadedApk(versionTag: String): File? {
+        val cleanTag = versionTag.trim().removePrefix("v")
+        val fileName = "sapay-$cleanTag.apk"
+        val dir = context.getExternalFilesDir(null) ?: context.filesDir
+        val targetFile = File(dir, fileName)
 
-        val request = DownloadManager.Request(Uri.parse(apkUrl)).apply {
-            setTitle("Mengunduh Pembaruan SaPay $versionTag")
-            setDescription("Mengunduh berkas APK...")
-            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            setDestinationUri(Uri.fromFile(destinationFile))
-            setMimeType("application/vnd.android.package-archive")
-        }
-
-        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        val downloadId = downloadManager.enqueue(request)
-
-        Toast.makeText(context, "Mulai mengunduh pembaruan...", Toast.LENGTH_SHORT).show()
-
-        val onCompleteReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctxt: Context?, intent: Intent?) {
-                val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
-                if (id == downloadId) {
-                    try {
-                        context.unregisterReceiver(this)
-                    } catch (_: Exception) {}
-
-                    installApk(destinationFile)
-                }
-            }
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(
-                onCompleteReceiver,
-                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                Context.RECEIVER_EXPORTED
-            )
+        // Verifikasi file ada dan ukuran minimal 5MB (APK rilis SaPay biasanya ~13MB)
+        return if (targetFile.exists() && targetFile.length() > 5 * 1024 * 1024) {
+            targetFile
         } else {
-            context.registerReceiver(
-                onCompleteReceiver,
-                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-            )
+            null
         }
     }
 
-    private fun installApk(file: File) {
+    /**
+     * Mengunduh berkas APK dengan streaming coroutine murni tanpa notifikasi bawaan OS.
+     * Dilengkapi pemantau progress (0.0f - 1.0f) dan pembersihan file sementara jika gagal.
+     */
+    suspend fun downloadApk(
+        apkUrl: String,
+        versionTag: String,
+        onProgress: (Float) -> Unit
+    ): Result<File> = withContext(Dispatchers.IO) {
+        val cleanTag = versionTag.trim().removePrefix("v")
+        val finalFileName = "sapay-$cleanTag.apk"
+        val tempFileName = "sapay-$cleanTag.apk.tmp"
+
+        val dir = context.getExternalFilesDir(null) ?: context.filesDir
+        val finalFile = File(dir, finalFileName)
+        val tempFile = File(dir, tempFileName)
+
+        // 1. Cek apakah sudah terunduh sebelumnya (Cegah Dobel Download)
+        if (finalFile.exists() && finalFile.length() > 5 * 1024 * 1024) {
+            onProgress(1.0f)
+            return@withContext Result.success(finalFile)
+        }
+
+        // 2. Bersihkan sisa unduhan sementara yang lama jika ada
+        if (tempFile.exists()) {
+            tempFile.delete()
+        }
+
+        try {
+            val request = Request.Builder()
+                .url(apkUrl)
+                .addHeader("User-Agent", "SaPay-Android-App")
+                .build()
+
+            val response = httpClient.newCall(request).execute()
+            if (!response.isSuccessful || response.body == null) {
+                return@withContext Result.failure(
+                    Exception("Gagal mengunduh berkas dari server (HTTP ${response.code})")
+                )
+            }
+
+            val body = response.body!!
+            val contentLength = body.contentLength()
+            var inputStream: InputStream? = null
+            var outputStream: FileOutputStream? = null
+
+            try {
+                inputStream = body.byteStream()
+                outputStream = FileOutputStream(tempFile)
+
+                val buffer = ByteArray(8 * 1024)
+                var bytesRead: Int
+                var totalBytesRead: Long = 0
+
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    outputStream.write(buffer, 0, bytesRead)
+                    totalBytesRead += bytesRead
+
+                    if (contentLength > 0) {
+                        val progress = (totalBytesRead.toFloat() / contentLength.toFloat()).coerceIn(0f, 1f)
+                        onProgress(progress)
+                    }
+                }
+
+                outputStream.flush()
+            } finally {
+                inputStream?.close()
+                outputStream?.close()
+            }
+
+            // 3. Verifikasi integritas unduhan
+            if (tempFile.length() < 1024 * 1024) {
+                tempFile.delete()
+                return@withContext Result.failure(
+                    Exception("Berkas pembaruan tidak lengkap atau rusak.")
+                )
+            }
+
+            // 4. Rename temp file ke file final
+            if (finalFile.exists()) {
+                finalFile.delete()
+            }
+            val renamed = tempFile.renameTo(finalFile)
+            val readyFile = if (renamed) finalFile else tempFile
+
+            onProgress(1.0f)
+            Result.success(readyFile)
+        } catch (e: Exception) {
+            // Hapus berkas parsial jika gagal agar tidak corrupt
+            if (tempFile.exists()) {
+                tempFile.delete()
+            }
+            Result.failure(Exception("Gagal mengunduh pembaruan: ${e.localizedMessage ?: "Gangguan koneksi"}", e))
+        }
+    }
+
+    /**
+     * Membuka installer Android untuk memasang berkas APK.
+     */
+    fun installApk(file: File, onError: (String) -> Unit = {}) {
         if (!file.exists()) {
-            Toast.makeText(context, "Berkas unduhan tidak ditemukan", Toast.LENGTH_SHORT).show()
+            onError("Berkas instalasi tidak ditemukan.")
             return
+        }
+
+        // Cek izin instalasi aplikasi tidak dikenal di Android 8.0+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val packageManager = context.packageManager
+            if (!packageManager.canRequestPackageInstalls()) {
+                val manageIntent = Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:${context.packageName}")
+                ).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(manageIntent)
+                onError("Harap izinkan pemasangan aplikasi untuk melanjutkan.")
+                return
+            }
         }
 
         try {
@@ -81,7 +179,7 @@ class InAppUpdater(private val context: Context) {
 
             context.startActivity(installIntent)
         } catch (e: Exception) {
-            Toast.makeText(context, "Gagal memasang APK: ${e.message}", Toast.LENGTH_LONG).show()
+            onError("Gagal membuka installer APK: ${e.message}")
         }
     }
 }
