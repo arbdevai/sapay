@@ -4,6 +4,7 @@ import com.arbdev.sapay.data.api.StarliteApi
 import com.arbdev.sapay.data.model.BillHistoryItem
 import com.arbdev.sapay.data.model.CheckPasswordRequest
 import com.arbdev.sapay.data.model.LoginRequest
+import com.arbdev.sapay.data.model.UserProfile
 import org.json.JSONObject
 
 class AuthRepository(private val api: StarliteApi) {
@@ -36,12 +37,27 @@ class AuthRepository(private val api: StarliteApi) {
         }
     }
 
-    suspend fun getHistory(token: String, customerId: String? = null): Result<List<BillHistoryItem>> {
+    suspend fun getProfile(token: String): Result<UserProfile> {
         return try {
             val formattedToken = if (token.startsWith("Bearer ")) token else "Bearer $token"
-            val response = api.getBillingHistory(token = formattedToken, customerId = customerId)
+            val response = api.getProfile(token = formattedToken)
+            if (response.isSuccessful && response.body()?.result != null) {
+                Result.success(response.body()!!.result!!)
+            } else {
+                val errorMsg = parseErrorMessage(response.errorBody()?.string())
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getHistory(token: String, page: Int = 1, pageSize: Int = 20): Result<List<BillHistoryItem>> {
+        return try {
+            val formattedToken = if (token.startsWith("Bearer ")) token else "Bearer $token"
+            val response = api.getBillingHistory(token = formattedToken, page = page, pageSize = pageSize)
             if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!.result)
+                Result.success(response.body()!!.data)
             } else {
                 val errorMsg = parseErrorMessage(response.errorBody()?.string())
                 Result.failure(Exception(errorMsg))

@@ -24,10 +24,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arbdev.sapay.BuildConfig
 import com.arbdev.sapay.data.model.BillHistoryItem
+import com.arbdev.sapay.data.model.UserProfile
 import com.arbdev.sapay.ui.theme.*
 import com.arbdev.sapay.ui.viewmodel.AuthUiState
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,7 +41,9 @@ fun AccountScreen(
     onPasswordChanged: (String) -> Unit,
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
-    onRefreshHistory: () -> Unit,
+    onRefresh: () -> Unit,
+    onPayFromHistory: (BillHistoryItem) -> Unit,
+    onRenewPackageClick: (UserProfile) -> Unit,
     onCheckUpdateClick: () -> Unit
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
@@ -53,36 +59,49 @@ fun AccountScreen(
             // Header
             Row(
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(PrimaryBlueLight),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        tint = PrimaryBlue
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(PrimaryBlueLight),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = PrimaryBlue
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = if (state.isLoggedIn) "Akun Starlite" else "Masuk Akun",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = if (state.isLoggedIn) "Detail layanan & riwayat tagihan" else "Login untuk melihat profil & invoice",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = if (state.isLoggedIn) "Akun & Riwayat" else "Masuk Akun",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = "Kelola akun Starlite dan riwayat tagihan",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
+
+                if (state.isLoggedIn) {
+                    IconButton(onClick = onRefresh) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Muat Ulang",
+                            tint = PrimaryBlue
+                        )
+                    }
                 }
             }
         }
@@ -104,7 +123,7 @@ fun AccountScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Gunakan nomor HP dan password akun Starlite kamu untuk melihat riwayat pembayaran.",
+                            text = "Gunakan nomor telepon dan password akun Starlite kamu untuk mengakses detail paket dan riwayat pembayaran.",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
                         )
@@ -183,79 +202,63 @@ fun AccountScreen(
                 }
             }
         } else {
-            item {
-                // Logged In Card
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
+            // Logged in: Profile Card (Persis seperti web Starlite)
+            val profile = state.profile
+            if (profile != null) {
+                item {
+                    UserProfileDetailsCard(
+                        profile = profile,
+                        onRenewPackage = { onRenewPackageClick(profile) },
+                        onLogout = onLogoutClick
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+            } else if (state.isLoadingProfile) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardSurface),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Column {
-                                Text(
-                                    text = "Terhubung Sebagai",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary
-                                )
-                                Text(
-                                    text = state.phoneInput,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = PrimaryBlueDark
-                                )
-                            }
-
-                            TextButton(onClick = onLogoutClick) {
-                                Text("Keluar Akun", color = ErrorRed)
-                            }
+                            CircularProgressIndicator(color = PrimaryBlue)
                         }
                     }
+                    Spacer(modifier = Modifier.height(20.dp))
                 }
+            }
 
-                Spacer(modifier = Modifier.height(20.dp))
-
+            // History Header
+            item {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Riwayat Pembayaran",
+                        text = "Riwayat Pembayaran & Tagihan",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
 
-                    IconButton(onClick = onRefreshHistory) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Muat Ulang",
-                            tint = PrimaryBlue
+                    if (state.isLoadingHistory) {
+                        CircularProgressIndicator(
+                            color = PrimaryBlue,
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
             }
 
-            if (state.isLoadingHistory) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = PrimaryBlue)
-                    }
-                }
-            } else if (state.history.isEmpty()) {
+            if (state.history.isEmpty() && !state.isLoadingHistory) {
                 item {
                     Card(
                         shape = RoundedCornerShape(16.dp),
@@ -269,7 +272,7 @@ fun AccountScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Belum ada catatan riwayat pembayaran.",
+                                text = "Tidak ada data riwayat transaksi.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = TextSecondary
                             )
@@ -278,14 +281,17 @@ fun AccountScreen(
                 }
             } else {
                 items(state.history) { item ->
-                    HistoryItemCard(item = item)
-                    Spacer(modifier = Modifier.height(10.dp))
+                    WebHistoryItemCard(
+                        item = item,
+                        onPayClick = { onPayFromHistory(item) }
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
             }
         }
 
         item {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // App Version & In-App Updater Section
             Card(
@@ -296,15 +302,15 @@ fun AccountScreen(
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
-                        text = "Tentang Aplikasi",
+                        text = "Tentang SaPay",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "SaPay (Starlite Auto Pay) v${BuildConfig.VERSION_NAME}",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = "Aplikasi Resmi Pelanggan WiFi Starlite • v${BuildConfig.VERSION_NAME}",
+                        style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
 
@@ -330,68 +336,315 @@ fun AccountScreen(
 }
 
 @Composable
-fun HistoryItemCard(item: BillHistoryItem) {
+fun UserProfileDetailsCard(
+    profile: UserProfile,
+    onRenewPackage: () -> Unit,
+    onLogout: () -> Unit
+) {
+    val activePkg = profile.activeRegionalPackage
+
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, BorderColor, RoundedCornerShape(14.dp))
+            .border(1.dp, BorderColor, RoundedCornerShape(20.dp))
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            // Customer Header
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = item.invoiceNumber ?: "Tagihan",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = PrimaryBlueDark
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = profile.name ?: "Pelanggan Starlite",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryBlueDark
+                    )
+                    Text(
+                        text = "ID: ${profile.customerId ?: "-"}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextSecondary
+                    )
+                }
 
-                val isSettled = item.paymentStatus?.contains("settle", ignoreCase = true) == true ||
-                        item.paymentStatus?.contains("success", ignoreCase = true) == true ||
-                        item.paymentStatus?.contains("lunas", ignoreCase = true) == true
-
-                val badgeBg = if (isSettled) SuccessGreenLight else AccentOrangeLight
-                val badgeColor = if (isSettled) SuccessGreen else AccentOrange
+                val status = profile.status ?: "active"
+                val (badgeColor, badgeBg, statusLabel) = when (status.lowercase()) {
+                    "active" -> Triple(SuccessGreen, SuccessGreenLight, "Aktif")
+                    "nearly-expired" -> Triple(WarningYellow, AccentOrangeLight, "Segera Berakhir")
+                    "dismantle", "isolated" -> Triple(ErrorRed, ErrorRedLight, "Nonaktif")
+                    else -> Triple(PrimaryBlue, PrimaryBlueLight, status)
+                }
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(badgeBg)
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = item.paymentStatus ?: "Status",
+                        text = statusLabel,
                         style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                         color = badgeColor
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            val amount = item.totalAmount ?: 0.0
-            val formatted = NumberFormat.getCurrencyInstance(Locale("id", "ID")).format(amount)
+            // Contact info
+            DetailItem(label = "Nomor Telepon", value = profile.phoneNumber ?: "-")
+            if (!profile.email.isNullOrBlank()) {
+                DetailItem(label = "Email", value = profile.email)
+            }
+            if (!profile.address.isNullOrBlank()) {
+                DetailItem(label = "Alamat", value = profile.address)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = BorderColor)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Active Package Card
             Text(
-                text = formatted,
+                text = "Paket Internet Aktif",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                color = PrimaryBlueDark
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = activePkg?.name ?: activePkg?.packageInfo?.name ?: "Paket Reguler",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    if (!activePkg?.speedUpTo.isNullOrBlank()) {
+                        Text(
+                            text = "Kecepatan: ${activePkg?.speedUpTo}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondary
+                        )
+                    }
+                }
+
+                if (activePkg?.price != null && activePkg.price > 0) {
+                    val formatted = NumberFormat.getCurrencyInstance(Locale("id", "ID")).format(activePkg.price)
+                    Text(
+                        text = formatted,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = PrimaryBlue
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Expiry Date & Remaining Days (Persis seperti di web Starlite)
+            val expireDateStr = profile.activePackageExpireDate
+            var daysRemaining = "-"
+            var formattedDueDate = "-"
+
+            if (!expireDateStr.isNullOrBlank()) {
+                try {
+                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                    val expireDate = sdf.parse(expireDateStr.substring(0, 10))
+                    if (expireDate != null) {
+                        val displayFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
+                        formattedDueDate = displayFormat.format(expireDate)
+
+                        val diff = expireDate.time - System.currentTimeMillis()
+                        val days = TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS) + 1
+                        daysRemaining = if (days >= 0) "$days Hari" else "Lewat Jatuh Tempo"
+                    }
+                } catch (_: Exception) {
+                    formattedDueDate = expireDateStr
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(PrimaryBlueLight)
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(text = "Jatuh Tempo", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text(text = formattedDueDate, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = PrimaryBlueDark)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(text = "Sisa Hari", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text(text = daysRemaining, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = if (daysRemaining.contains("Lewat")) ErrorRed else PrimaryBlueDark)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Action Button "Perpanjang / Bayar Paket"
+            Button(
+                onClick = onRenewPackage,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Payment,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Perpanjang Paket / Bayar Tagihan", fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            TextButton(
+                onClick = onLogout,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Keluar Akun", color = ErrorRed)
+            }
+        }
+    }
+}
+
+@Composable
+fun WebHistoryItemCard(
+    item: BillHistoryItem,
+    onPayClick: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, BorderColor, RoundedCornerShape(16.dp))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            val isPaid = item.isPaid == true
+
+            // Date & Status calculation
+            var formattedDueDate = item.dueDate ?: "-"
+            var isLate = false
+
+            if (!item.dueDate.isNullOrBlank()) {
+                try {
+                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                    val date = sdf.parse(item.dueDate.substring(0, 10))
+                    if (date != null) {
+                        val displayFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
+                        formattedDueDate = displayFormat.format(date)
+                        isLate = Date().after(date)
+                    }
+                } catch (_: Exception) {}
+            }
+
+            // Settlement date if paid
+            val settlement = item.transactionList.firstOrNull { it.paymentStatus == "settle" }?.settlementDate
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val packageName = item.regionalPackage?.packageInfo?.name
+                    ?: item.regionalPackage?.name
+                    ?: "Langganan WiFi"
+
+                Text(
+                    text = packageName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = PrimaryBlueDark
+                )
+
+                val (badgeBg, badgeColor, statusText) = when {
+                    isPaid -> Triple(SuccessGreenLight, SuccessGreen, "Tagihan Lunas")
+                    isLate -> Triple(ErrorRedLight, ErrorRed, "Lewat Jatuh Tempo")
+                    else -> Triple(AccentOrangeLight, AccentOrange, "Belum Dibayar")
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(badgeBg)
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = badgeColor
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val amount = item.amount ?: item.regionalPackage?.price ?: 0.0
+            val formatted = NumberFormat.getCurrencyInstance(Locale("id", "ID")).format(amount)
+            Text(
+                text = "$formatted / bulan",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = TextPrimary,
+                fontSize = 18.sp
             )
 
-            if (!item.createdAt.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(6.dp))
+
+            if (isPaid && !settlement.isNullOrBlank()) {
                 Text(
-                    text = item.createdAt,
+                    text = "Sudah dibayarkan pada $settlement",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SuccessGreen
+                )
+            } else {
+                Text(
+                    text = "Jatuh tempo: $formattedDueDate",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isLate) ErrorRed else TextSecondary
+                )
+            }
+
+            if (!item.code.isNullOrBlank()) {
+                Text(
+                    text = "Kode Invoice: ${item.code}",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
+            }
+
+            if (!isPaid) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Button(
+                    onClick = onPayClick,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                ) {
+                    Text("Bayar Sekarang", fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

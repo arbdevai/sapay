@@ -2,11 +2,7 @@ package com.arbdev.sapay.data.api
 
 import com.arbdev.sapay.data.model.*
 import retrofit2.Response
-import retrofit2.http.Body
-import retrofit2.http.GET
-import retrofit2.http.Header
-import retrofit2.http.POST
-import retrofit2.http.Query
+import retrofit2.http.*
 
 interface StarliteApi {
 
@@ -14,6 +10,17 @@ interface StarliteApi {
     suspend fun checkMicrositeBill(
         @Body request: MicrositeRequest
     ): Response<MicrositeResponse>
+
+    @POST("app/customer/reactive-customer")
+    suspend fun reactiveCustomer(
+        @Body request: ReactiveCustomerRequest
+    ): Response<ReactiveCustomerResponse>
+
+    @GET("app/package/change-package-list")
+    suspend fun getChangePackageList(
+        @Query("customer_id") customerId: String? = null,
+        @Query("mitra_id") mitraId: String? = null
+    ): Response<ChangePackageListResponse>
 
     @GET("app/transaction/payment-channels")
     suspend fun getPaymentChannels(): Response<List<PaymentChannelGroup>>
@@ -43,9 +50,15 @@ interface StarliteApi {
         @Body request: LoginRequest
     ): Response<LoginResponse>
 
+    @GET("app/auth/profile")
+    suspend fun getProfile(
+        @Header("Authorization") token: String
+    ): Response<ProfileResponse>
+
     @GET("app/billing/history-billing")
     suspend fun getBillingHistory(
         @Header("Authorization") token: String,
-        @Query("customer_id") customerId: String? = null
+        @Query("page") page: Int = 1,
+        @Query("pageSize") pageSize: Int = 20
     ): Response<BillHistoryResponse>
 }

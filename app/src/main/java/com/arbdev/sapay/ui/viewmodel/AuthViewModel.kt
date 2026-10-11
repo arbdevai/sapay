@@ -3,6 +3,9 @@ package com.arbdev.sapay.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.arbdev.sapay.data.model.BillHistoryItem
+import com.arbdev.sapay.data.model.CustomerInfo
+import com.arbdev.sapay.data.model.RegionalPackage
+import com.arbdev.sapay.data.model.UserProfile
 import com.arbdev.sapay.data.preferences.AppPreferences
 import com.arbdev.sapay.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +21,8 @@ data class AuthUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val token: String? = null,
+    val profile: UserProfile? = null,
+    val isLoadingProfile: Boolean = false,
     val history: List<BillHistoryItem> = emptyList(),
     val isLoadingHistory: Boolean = false
 )
@@ -44,7 +49,7 @@ class AuthViewModel(
                     token = token,
                     phoneInput = phone
                 )
-                loadHistory()
+                loadProfileAndHistory(token)
             }
         }
     }
@@ -82,7 +87,7 @@ class AuthViewModel(
                         token = token,
                         passwordInput = ""
                     )
-                    loadHistory()
+                    loadProfileAndHistory(token)
                 },
                 onFailure = { error ->
                     _uiState.value = _uiState.value.copy(
@@ -94,11 +99,43 @@ class AuthViewModel(
         }
     }
 
-    fun loadHistory() {
-        val token = _uiState.value.token ?: return
+    fun loadProfileAndHistory(token: String? = null) {
+        val activeToken = token ?: _uiState.value.token ?: return
+        loadProfile(activeToken)
+        loadHistory(activeToken)
+    }
+
+    fun loadProfile(token: String? = null) {
+        val activeToken = token ?: _uiState.value.token ?: return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingProfile = true)
+            val result = repository.getProfile(activeToken)
+            result.fold(
+                onSuccess = { profileData ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingProfile = false,
+                        profile = profileData
+                    )
+                    // Also save customer ID for quick bill sync
+                    if (!profileData.customerId.isNullOrBlank()) {
+                        preferences.saveCustomerInfo(profileData.customerId, profileData.name ?: "")
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingProfile = false,
+                        errorMessage = if (_uiState.value.profile == null) error.message else null
+                    )
+                }
+            )
+        }
+    }
+
+    fun loadHistory(token: String? = null) {
+        val activeToken = token ?: _uiState.value.token ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingHistory = true)
-            val result = repository.getHistory(token)
+            val result = repository.getHistory(activeToken, page = 1, pageSize = 20)
             result.fold(
                 onSuccess = { list ->
                     _uiState.value = _uiState.value.copy(
@@ -109,7 +146,7 @@ class AuthViewModel(
                 onFailure = { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoadingHistory = false,
-                        errorMessage = error.message ?: "Gagal memuat histori tagihan"
+                        errorMessage = error.message ?: "Gagal memuat riwayat transaksi"
                     )
                 }
             )

@@ -10,10 +10,34 @@ data class MicrositeRequest(
 )
 
 @Serializable
+data class ReactiveCustomerRequest(
+    @SerialName("billing_date") val billingDate: String,
+    @SerialName("payload") val payload: String
+)
+
+@Serializable
+data class ReactiveCustomerResponse(
+    @SerialName("statusCode") val statusCode: Int? = null,
+    @SerialName("message") val message: String? = null,
+    @SerialName("data") val data: JsonElement? = null
+)
+
+@Serializable
+data class InnerPackage(
+    @SerialName("id") val id: String? = null,
+    @SerialName("name") val name: String? = null,
+    @SerialName("type") val type: String? = null
+)
+
+@Serializable
 data class RegionalPackage(
     @SerialName("id") val id: String? = null,
     @SerialName("name") val name: String? = null,
-    @SerialName("price") val price: Double? = null
+    @SerialName("price") val price: Double? = null,
+    @SerialName("speed_up_to") val speedUpTo: String? = null,
+    @SerialName("duration") val duration: Int? = null,
+    @SerialName("description") val description: String? = null,
+    @SerialName("package_id") val packageInfo: InnerPackage? = null
 )
 
 @Serializable
@@ -22,8 +46,14 @@ data class CustomerInfo(
     @SerialName("customer_id") val customerId: String? = null,
     @SerialName("name") val name: String? = null,
     @SerialName("phone_number") val phoneNumber: String? = null,
+    @SerialName("email") val email: String? = null,
     @SerialName("address") val address: String? = null,
-    @SerialName("regional_package_id") val regionalPackage: RegionalPackage? = null
+    @SerialName("mitra_id") val mitraId: String? = null,
+    @SerialName("status") val status: String? = null,
+    @SerialName("active_package_expire_date") val activePackageExpireDate: String? = null,
+    @SerialName("settlement_date") val settlementDate: String? = null,
+    @SerialName("regional_package_id") val regionalPackage: RegionalPackage? = null,
+    @SerialName("active_regional_package_id") val activeRegionalPackage: RegionalPackage? = null
 )
 
 @Serializable
@@ -32,6 +62,19 @@ data class MicrositeResponse(
     @SerialName("message") val message: String? = null,
     @SerialName("customer") val customer: CustomerInfo? = null,
     @SerialName("data") val data: String? = null
+)
+
+@Serializable
+data class PackageWrapper(
+    @SerialName("reguler") val reguler: List<RegionalPackage> = emptyList(),
+    @SerialName("sme") val sme: List<RegionalPackage> = emptyList()
+)
+
+@Serializable
+data class ChangePackageListResponse(
+    @SerialName("statusCode") val statusCode: Int? = null,
+    @SerialName("message") val message: String? = null,
+    @SerialName("result") val result: PackageWrapper? = null
 )
 
 @Serializable

@@ -48,6 +48,13 @@ fun MainScreen(
         }
     }
 
+    LaunchedEffect(billingState.statusMessage) {
+        val msg = billingState.statusMessage
+        if (!msg.isNullOrBlank()) {
+            snackbarHostState.showSnackbar(msg)
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
@@ -80,13 +87,18 @@ fun MainScreen(
 
                     NavigationBarItem(
                         selected = selectedTab == MainTab.ACCOUNT,
-                        onClick = { selectedTab = MainTab.ACCOUNT },
+                        onClick = {
+                            selectedTab = MainTab.ACCOUNT
+                            if (authState.isLoggedIn && authState.profile == null) {
+                                authViewModel.loadProfileAndHistory()
+                            }
+                        },
                         icon = {
-                            Icon(Icons.Default.AccountCircle, contentDescription = "Akun & Riwayat")
+                            Icon(Icons.Default.AccountCircle, contentDescription = "Akun Starlite")
                         },
                         label = {
                             Text(
-                                "Akun & Riwayat",
+                                "Akun Starlite",
                                 fontWeight = if (selectedTab == MainTab.ACCOUNT) FontWeight.Bold else FontWeight.Normal
                             )
                         },
@@ -110,13 +122,17 @@ fun MainScreen(
                                 state = billingState,
                                 onQueryChanged = billingViewModel::onQueryChanged,
                                 onCheckBill = { billingViewModel.checkBill() },
+                                onConfirmCheckboxChanged = billingViewModel::onConfirmCheckboxChanged,
+                                onSelectPackage = billingViewModel::onSelectPackage,
                                 onProceedToPayment = {
                                     billingViewModel.loadPaymentChannels()
                                     currentSubScreen = BillingSubScreen.CHANNELS
                                 },
                                 onViewCurrentPayment = {
                                     currentSubScreen = BillingSubScreen.DETAIL
-                                }
+                                },
+                                onReactivateClick = { billingViewModel.reactivateCustomer() },
+                                onDismissReactivation = { billingViewModel.dismissReactivation() }
                             )
                         }
                         BillingSubScreen.CHANNELS -> {
@@ -149,7 +165,28 @@ fun MainScreen(
                         onPasswordChanged = authViewModel::onPasswordChanged,
                         onLoginClick = authViewModel::login,
                         onLogoutClick = authViewModel::logout,
-                        onRefreshHistory = authViewModel::loadHistory,
+                        onRefresh = { authViewModel.loadProfileAndHistory() },
+                        onPayFromHistory = { historyItem ->
+                            val customerId = authState.profile?.customerId
+                                ?: authState.phoneInput
+                            if (customerId.isNotBlank()) {
+                                billingViewModel.onQueryChanged(customerId)
+                                billingViewModel.checkBill(customerId)
+                                selectedTab = MainTab.BILLING
+                                currentSubScreen = BillingSubScreen.DASHBOARD
+                            }
+                        },
+                        onRenewPackageClick = { userProfile ->
+                            val customerId = userProfile.customerId
+                                ?: userProfile.phoneNumber
+                                ?: ""
+                            if (customerId.isNotBlank()) {
+                                billingViewModel.onQueryChanged(customerId)
+                                billingViewModel.checkBill(customerId)
+                                selectedTab = MainTab.BILLING
+                                currentSubScreen = BillingSubScreen.DASHBOARD
+                            }
+                        },
                         onCheckUpdateClick = { updateViewModel.checkForUpdate(manual = true) }
                     )
                 }

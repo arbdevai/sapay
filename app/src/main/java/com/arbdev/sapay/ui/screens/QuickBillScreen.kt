@@ -2,6 +2,7 @@ package com.arbdev.sapay.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -23,7 +24,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.arbdev.sapay.data.model.CustomerInfo
+import com.arbdev.sapay.data.model.RegionalPackage
 import com.arbdev.sapay.ui.theme.*
 import com.arbdev.sapay.ui.viewmodel.BillingUiState
 import java.text.NumberFormat
@@ -35,8 +38,12 @@ fun QuickBillScreen(
     state: BillingUiState,
     onQueryChanged: (String) -> Unit,
     onCheckBill: () -> Unit,
+    onConfirmCheckboxChanged: (Boolean) -> Unit,
+    onSelectPackage: (RegionalPackage) -> Unit,
     onProceedToPayment: () -> Unit,
-    onViewCurrentPayment: () -> Unit
+    onViewCurrentPayment: () -> Unit,
+    onReactivateClick: () -> Unit,
+    onDismissReactivation: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
     val scrollState = rememberScrollState()
@@ -95,12 +102,12 @@ fun QuickBillScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Cek & bayar tagihan internet tanpa ribet, langsung dari ponsel kamu.",
+                    text = "Cek & bayar tagihan internet tanpa login web, tepat waktu dan sat-set.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.8f),
+                    color = Color.White.copy(alpha = 0.85f),
                     lineHeight = 18.sp
                 )
             }
@@ -123,7 +130,7 @@ fun QuickBillScreen(
                     color = TextPrimary
                 )
                 Text(
-                    text = "Masukkan ID Pelanggan atau nomor telepon yang terdaftar",
+                    text = "Masukkan Nomor Pelanggan atau Nomor Telepon Pelanggan",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
@@ -133,7 +140,7 @@ fun QuickBillScreen(
                 OutlinedTextField(
                     value = state.queryInput,
                     onValueChange = onQueryChanged,
-                    placeholder = { Text("Contoh: STL123456 / 08123456789") },
+                    placeholder = { Text("Nomor Pelanggan / Nomor Telepon") },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
@@ -201,7 +208,7 @@ fun QuickBillScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Cek Tagihan Sekarang",
+                            text = "Cek Tagihan",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp
                         )
@@ -210,8 +217,8 @@ fun QuickBillScreen(
             }
         }
 
-        // Error message if any
-        if (!state.errorMessage.isNullOrBlank()) {
+        // Error message if any (and not reactivation)
+        if (!state.errorMessage.isNullOrBlank() && !state.needsReactivation) {
             Spacer(modifier = Modifier.height(16.dp))
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -240,14 +247,19 @@ fun QuickBillScreen(
             }
         }
 
-        // Customer Result Card
+        // Customer Result Card (Konfirmasi Data Pelanggan persis seperti web)
         if (state.customerInfo != null) {
             Spacer(modifier = Modifier.height(20.dp))
-            CustomerResultCard(
+            ConfirmationDataCard(
                 customer = state.customerInfo,
-                isPaymentSuccess = state.isPaymentSuccess,
-                hasActivePayment = state.currentPayment != null && state.currentPayment.paymentStatus != "settle",
+                selectedPackage = state.selectedPackage,
+                availablePackages = state.availablePackages,
+                isDataConfirmed = state.isDataConfirmed,
+                isLoading = state.isLoading,
+                onConfirmCheckboxChanged = onConfirmCheckboxChanged,
+                onSelectPackage = onSelectPackage,
                 onProceedToPayment = onProceedToPayment,
+                hasActivePayment = state.currentPayment != null && !state.currentPayment.trxCode.isNullOrBlank(),
                 onViewCurrentPayment = onViewCurrentPayment
             )
         }
@@ -273,18 +285,88 @@ fun QuickBillScreen(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "Tips SaPay",
+                        text = "Informasi Pembayaran",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryBlueDark
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "ID Pelanggan tersimpan otomatis di perangkat kamu. Cukup buka aplikasi setiap bulan untuk mengecek tagihan dan membayar langsung via QRIS atau VA.",
+                        text = "Pelanggan dapat melakukan pengecekan dan pembayaran tagihan sebelum atau pada tanggal jatuh tempo. Jika layanan dalam masa dismantle, Anda dapat mereaktivasi akun secara otomatis.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextPrimary.copy(alpha = 0.8f),
+                        color = TextPrimary.copy(alpha = 0.85f),
                         lineHeight = 18.sp
                     )
+                }
+            }
+        }
+    }
+
+    // Modal Reaktivasi (Sesuai Web Starlite)
+    if (state.needsReactivation) {
+        Dialog(onDismissRequest = onDismissReactivation) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = CardSurface,
+                tonalElevation = 6.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp)
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text(
+                        text = "Layanan Kamu Dalam Masa",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryBlueDark
+                    )
+                    Text(
+                        text = "Dismantle (Nonaktif Sementara)",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = ErrorRed
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Layanan internet kamu saat ini sudah memasuki masa dismantle (Nonaktif Sementara). Untuk mengaktifkan kembali layanan dan melanjutkan pembayaran tagihan, silakan klik tombol “Reaktivasi” di bawah ini.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextPrimary,
+                        lineHeight = 20.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        OutlinedButton(
+                            onClick = onDismissReactivation,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !state.isReactivating
+                        ) {
+                            Text("Batal", color = ErrorRed)
+                        }
+
+                        Button(
+                            onClick = onReactivateClick,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
+                            enabled = !state.isReactivating
+                        ) {
+                            if (state.isReactivating) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("Reaktivasi", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -292,11 +374,16 @@ fun QuickBillScreen(
 }
 
 @Composable
-fun CustomerResultCard(
+fun ConfirmationDataCard(
     customer: CustomerInfo,
-    isPaymentSuccess: Boolean,
-    hasActivePayment: Boolean,
+    selectedPackage: RegionalPackage?,
+    availablePackages: List<RegionalPackage>,
+    isDataConfirmed: Boolean,
+    isLoading: Boolean,
+    onConfirmCheckboxChanged: (Boolean) -> Unit,
+    onSelectPackage: (RegionalPackage) -> Unit,
     onProceedToPayment: () -> Unit,
+    hasActivePayment: Boolean,
     onViewCurrentPayment: () -> Unit
 ) {
     Card(
@@ -308,145 +395,107 @@ fun CustomerResultCard(
             .border(1.dp, BorderColor, RoundedCornerShape(20.dp))
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Informasi Tagihan",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
+            Text(
+                text = "Konfirmasi Data Pelanggan",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = PrimaryBlueDark
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Pastikan data berikut sudah sesuai sebelum melanjutkan pembayaran:",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
 
-                val statusBg = if (isPaymentSuccess) SuccessGreenLight else AccentOrangeLight
-                val statusColor = if (isPaymentSuccess) SuccessGreen else AccentOrange
-                val statusText = if (isPaymentSuccess) "Lunas" else "Belum Dibayar"
+            Spacer(modifier = Modifier.height(16.dp))
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(statusBg)
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = statusColor
-                    )
+            DetailItem(label = "ID Pelanggan", value = customer.customerId ?: "-")
+            DetailItem(label = "Nama Lengkap", value = customer.name ?: "-")
+            DetailItem(label = "Nomor Telepon", value = customer.phoneNumber ?: "-")
+
+            val activePkg = selectedPackage ?: customer.regionalPackage ?: customer.activeRegionalPackage
+            if (activePkg != null) {
+                DetailItem(label = "Paket Internet", value = activePkg.name ?: "-")
+
+                if (!activePkg.speedUpTo.isNullOrBlank()) {
+                    DetailItem(label = "Kecepatan", value = activePkg.speedUpTo)
+                }
+
+                if (activePkg.price != null && activePkg.price > 0) {
+                    val formatted = NumberFormat.getCurrencyInstance(Locale("id", "ID")).format(activePkg.price)
+                    DetailItem(label = "Total Tagihan", value = formatted, isHighlight = true)
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            DetailItem(label = "Nama Pelanggan", value = customer.name ?: "-")
-            DetailItem(label = "ID Pelanggan", value = customer.customerId ?: "-")
-            DetailItem(label = "Nomor Telepon", value = customer.phoneNumber ?: "-")
-
-            val packageName = customer.regionalPackage?.name
-            if (!packageName.isNullOrBlank()) {
-                DetailItem(label = "Paket Internet", value = packageName)
+            // Checkbox Persetujuan (Persis seperti di web Starlite)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onConfirmCheckboxChanged(!isDataConfirmed) }
+                    .padding(vertical = 4.dp)
+            ) {
+                Checkbox(
+                    checked = isDataConfirmed,
+                    onCheckedChange = { onConfirmCheckboxChanged(it) },
+                    colors = CheckboxDefaults.colors(checkedColor = PrimaryBlue)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Anda yakin bahwa data pelanggan Anda sudah benar?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary
+                )
             }
 
-            val price = customer.regionalPackage?.price
-            if (price != null && price > 0) {
-                val formatted = NumberFormat.getCurrencyInstance(Locale("id", "ID")).format(price)
-                DetailItem(label = "Estimasi Nominal", value = formatted, isHighlight = true)
-            }
+            Spacer(modifier = Modifier.height(18.dp))
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            if (isPaymentSuccess) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(SuccessGreenLight)
-                        .padding(14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = SuccessGreen
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Layanan Anda aktif dan sudah lunas.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = SuccessGreen
-                        )
-                    }
+            Button(
+                onClick = onProceedToPayment,
+                enabled = isDataConfirmed && !isLoading,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isDataConfirmed) AccentOrange else Color.Gray
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = "Lanjutkan ke Pembayaran",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
                 }
-            } else if (hasActivePayment) {
-                Button(
+            }
+
+            if (hasActivePayment) {
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedButton(
                     onClick = onViewCurrentPayment,
                     shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
                         imageVector = Icons.Default.QrCode2,
                         contentDescription = null,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Lihat Kode Pembayaran / QRIS",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
-                }
-            } else {
-                Button(
-                    onClick = onProceedToPayment,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Payment,
-                        contentDescription = null,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Bayar Sekarang",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
+                    Text("Lihat Kode Bayar / QRIS Berjalan")
                 }
             }
         }
-    }
-}
-
-@Composable
-fun DetailItem(label: String, value: String, isHighlight: Boolean = false) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (isHighlight) FontWeight.Bold else FontWeight.SemiBold,
-            color = if (isHighlight) PrimaryBlue else TextPrimary
-        )
     }
 }

@@ -3,6 +3,9 @@ package com.arbdev.sapay.data.repository
 import com.arbdev.sapay.data.api.StarliteApi
 import com.arbdev.sapay.data.model.*
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class BillingRepository(private val api: StarliteApi) {
 
@@ -14,6 +17,38 @@ class BillingRepository(private val api: StarliteApi) {
             } else {
                 val errorMsg = parseErrorMessage(response.errorBody()?.string())
                 Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun reactivateCustomer(payload: String): Result<Boolean> {
+        return try {
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            val response = api.reactiveCustomer(ReactiveCustomerRequest(billingDate = today, payload = payload))
+            if (response.isSuccessful || response.code() == 201) {
+                Result.success(true)
+            } else {
+                val errorMsg = parseErrorMessage(response.errorBody()?.string())
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAvailablePackages(customerId: String?, mitraId: String?): Result<List<RegionalPackage>> {
+        return try {
+            val response = api.getChangePackageList(customerId = customerId, mitraId = mitraId)
+            if (response.isSuccessful && response.body()?.result != null) {
+                val wrapper = response.body()!!.result!!
+                val combined = mutableListOf<RegionalPackage>()
+                combined.addAll(wrapper.reguler)
+                combined.addAll(wrapper.sme)
+                Result.success(combined)
+            } else {
+                Result.success(emptyList())
             }
         } catch (e: Exception) {
             Result.failure(e)

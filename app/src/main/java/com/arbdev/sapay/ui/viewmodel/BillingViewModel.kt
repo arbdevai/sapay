@@ -15,8 +15,13 @@ data class BillingUiState(
     val queryInput: String = "",
     val isLoading: Boolean = false,
     val customerInfo: CustomerInfo? = null,
+    val selectedPackage: RegionalPackage? = null,
+    val availablePackages: List<RegionalPackage> = emptyList(),
     val dataToken: String? = null,
     val errorMessage: String? = null,
+    val needsReactivation: Boolean = false,
+    val isReactivating: Boolean = false,
+    val isDataConfirmed: Boolean = false,
     val paymentChannels: List<PaymentChannelGroup> = emptyList(),
     val selectedChannel: PaymentChannelItem? = null,
     val currentPayment: CurrentPaymentResult? = null,
@@ -48,72 +53,122 @@ class BillingViewModel(
     }
 
     fun onQueryChanged(newQuery: String) {
-        _uiState.value = _uiState.value.copy(queryInput = newQuery, errorMessage = null)
+        _uiState.value = _uiState.value.copy(
+            queryInput = newQuery,
+            errorMessage = null,
+            needsReactivation = false
+        )
+    }
+
+    fun onConfirmCheckboxChanged(checked: Boolean) {
+        _uiState.value = _uiState.value.copy(isDataConfirmed = checked)
+    }
+
+    fun onSelectPackage(pkg: RegionalPackage) {
+        _uiState.value = _uiState.value.copy(selectedPackage = pkg)
     }
 
     fun checkBill(query: String? = null) {
         val payload = (query ?: _uiState.value.queryInput).trim()
         if (payload.isBlank()) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Masukkan Nomor Pelanggan atau Nomor HP")
+            _uiState.value = _uiState.value.copy(errorMessage = "Nomor Pelanggan Harus Diisi!")
             return
         }
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, customerInfo = null)
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                errorMessage = null,
+                needsReactivation = false,
+                customerInfo = null,
+                isDataConfirmed = false
+            )
             val result = repository.checkBill(payload)
             result.fold(
                 onSuccess = { response ->
                     val customer = response.customer
                     if (customer != null) {
+                        val initialPackage = customer.regionalPackage ?: customer.activeRegionalPackage
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             customerInfo = customer,
+                            selectedPackage = initialPackage,
                             dataToken = response.data,
                             errorMessage = null
                         )
-                        // Save to preferences for quick bill on next open
+
                         val idToSave = customer.customerId ?: customer.phoneNumber ?: payload
                         val nameToSave = customer.name ?: ""
                         preferences.saveCustomerInfo(idToSave, nameToSave)
 
-                        // Check if there is an active current payment
-                        if (!customer.id.isNullOrBlank()) {
-                            checkExistingPayment(customer.id)
-                        }
+                        // Fetch available packages for this customer
+                        fetchAvailablePackages(customer.customerId, customer.mitraId)
                     } else {
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
-                            errorMessage = response.message ?: "Data pelanggan tidak ditemukan"
+                            errorMessage = response.message ?: "Customer tidak ditemukan"
                         )
                     }
                 },
                 onFailure = { error ->
+                    val msg = error.message ?: "Gagal memverifikasi pelanggan"
+                    if (msg.contains("reaktivasi", ignoreCase = true)) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            needsReactivation = true,
+                            errorMessage = msg
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            errorMessage = msg
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    private fun fetchAvailablePackages(customerId: String?, mitraId: String?) {
+        viewModelScope.launch {
+            val result = repository.getAvailablePackages(customerId, mitraId)
+            result.onSuccess { packages ->
+                if (packages.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(availablePackages = packages)
+                }
+            }
+        }
+    }
+
+    fun reactivateCustomer() {
+        val payload = _uiState.value.queryInput.trim()
+        if (payload.isBlank()) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isReactivating = true, errorMessage = null)
+            val result = repository.reactivateCustomer(payload)
+            result.fold(
+                onSuccess = {
                     _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = error.message ?: "Gagal memverifikasi pelanggan"
+                        isReactivating = false,
+                        needsReactivation = false,
+                        statusMessage = "Akun berhasil direaktivasi."
+                    )
+                    // Automatically re-check bill as on the web
+                    checkBill(payload)
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isReactivating = false,
+                        errorMessage = error.message ?: "Gagal mereaktivasi akun"
                     )
                 }
             )
         }
     }
 
-    private fun checkExistingPayment(customerId: String) {
-        viewModelScope.launch {
-            val result = repository.getCurrentPayment(customerId)
-            result.onSuccess { activePayment ->
-                if (activePayment.paymentStatus == "settle") {
-                    _uiState.value = _uiState.value.copy(
-                        currentPayment = activePayment,
-                        isPaymentSuccess = true,
-                        statusMessage = "Tagihan sudah lunas."
-                    )
-                } else if (!activePayment.trxCode.isNullOrBlank()) {
-                    _uiState.value = _uiState.value.copy(
-                        currentPayment = activePayment
-                    )
-                }
-            }
-        }
+    fun dismissReactivation() {
+        _uiState.value = _uiState.value.copy(needsReactivation = false)
     }
 
     fun loadPaymentChannels() {
@@ -145,12 +200,15 @@ class BillingViewModel(
     fun processPayment(onReadyToPay: () -> Unit) {
         val customer = _uiState.value.customerInfo ?: return
         val channel = _uiState.value.selectedChannel ?: return
+        val packageId = _uiState.value.selectedPackage?.id
+            ?: customer.regionalPackage?.id
+            ?: customer.activeRegionalPackage?.id
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             val result = repository.createPayment(
                 customerId = customer.id ?: "",
-                regionalPackageId = customer.regionalPackage?.id,
+                regionalPackageId = packageId,
                 channelId = channel.id
             )
 
@@ -176,7 +234,7 @@ class BillingViewModel(
                             onFailure = { error ->
                                 _uiState.value = _uiState.value.copy(
                                     isLoading = false,
-                                    errorMessage = error.message ?: "Gagal memuat rincian transaksi pembayaran"
+                                    errorMessage = error.message ?: "Gagal memuat rincian transaksi"
                                 )
                             }
                         )
@@ -198,7 +256,6 @@ class BillingViewModel(
             val result = repository.checkPaymentStatus(trxCode)
             result.fold(
                 onSuccess = {
-                    // Refresh current payment
                     val customerId = _uiState.value.customerInfo?.id
                     if (!customerId.isNullOrBlank()) {
                         val refreshed = repository.getCurrentPayment(customerId)
@@ -216,7 +273,7 @@ class BillingViewModel(
                     }
                     _uiState.value = _uiState.value.copy(
                         isCheckingStatus = false,
-                        statusMessage = "Status diperbarui. Menunggu konfirmasi bank/sistem."
+                        statusMessage = "Status diperbarui. Menunggu konfirmasi pembayaran."
                     )
                 },
                 onFailure = { error ->
