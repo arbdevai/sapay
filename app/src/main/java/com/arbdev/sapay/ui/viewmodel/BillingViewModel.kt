@@ -171,10 +171,10 @@ class BillingViewModel(
         _uiState.value = _uiState.value.copy(needsReactivation = false)
     }
 
-    fun loadPaymentChannels() {
-        if (_uiState.value.paymentChannels.isNotEmpty()) return
+    fun loadPaymentChannels(forceRefresh: Boolean = false) {
+        if (!forceRefresh && _uiState.value.paymentChannels.isNotEmpty()) return
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             val result = repository.getPaymentChannels()
             result.fold(
                 onSuccess = { groups ->

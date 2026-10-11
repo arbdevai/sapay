@@ -30,7 +30,8 @@ fun PaymentChannelScreen(
     state: BillingUiState,
     onBackClick: () -> Unit,
     onSelectChannel: (PaymentChannelItem) -> Unit,
-    onConfirmPayment: () -> Unit
+    onConfirmPayment: () -> Unit,
+    onRetry: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -107,6 +108,67 @@ fun PaymentChannelScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(color = PrimaryBlue)
+                }
+            } else if (state.paymentChannels.isEmpty() && !state.errorMessage.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardSurface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ErrorOutline,
+                                contentDescription = null,
+                                tint = ErrorRed,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Gagal Memuat Metode Pembayaran",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = state.errorMessage,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                            Spacer(modifier = Modifier.height(20.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = onBackClick,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Kembali")
+                                }
+                                Button(
+                                    onClick = onRetry,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Coba Lagi")
+                                }
+                            }
+                        }
+                    }
                 }
             } else {
                 LazyColumn(

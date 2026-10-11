@@ -23,7 +23,7 @@ interface StarliteApi {
     ): Response<ChangePackageListResponse>
 
     @GET("app/transaction/payment-channels")
-    suspend fun getPaymentChannels(): Response<List<PaymentChannelGroup>>
+    suspend fun getPaymentChannels(): Response<PaymentChannelsResponse>
 
     @POST("app/billing/handle-all-customer-payment")
     suspend fun handleCustomerPayment(
@@ -45,10 +45,20 @@ interface StarliteApi {
         @Body request: CheckPasswordRequest
     ): Response<CheckPasswordResponse>
 
+    @POST("app/auth/forgot-password")
+    suspend fun forgotPassword(
+        @Body request: CheckPasswordRequest
+    ): Response<CheckPasswordResponse>
+
     @POST("app/auth/login")
     suspend fun login(
         @Body request: LoginRequest
     ): Response<LoginResponse>
+
+    @POST("app/auth/logout")
+    suspend fun logout(
+        @Header("Authorization") token: String
+    ): Response<Unit>
 
     @GET("app/auth/profile")
     suspend fun getProfile(

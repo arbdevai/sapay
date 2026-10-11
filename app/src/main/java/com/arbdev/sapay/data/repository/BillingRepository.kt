@@ -59,9 +59,10 @@ class BillingRepository(private val api: StarliteApi) {
         return try {
             val response = api.getPaymentChannels()
             if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+                Result.success(response.body()!!.data)
             } else {
-                Result.failure(Exception("Gagal mengambil metode pembayaran"))
+                val errorMsg = parseErrorMessage(response.errorBody()?.string())
+                Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
             Result.failure(e)

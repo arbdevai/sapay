@@ -55,6 +55,14 @@ fun MainScreen(
         }
     }
 
+    LaunchedEffect(authState.statusMessage) {
+        val msg = authState.statusMessage
+        if (!msg.isNullOrBlank()) {
+            snackbarHostState.showSnackbar(msg)
+            authViewModel.clearStatusMessage()
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
@@ -132,7 +140,13 @@ fun MainScreen(
                                     currentSubScreen = BillingSubScreen.DETAIL
                                 },
                                 onReactivateClick = { billingViewModel.reactivateCustomer() },
-                                onDismissReactivation = { billingViewModel.dismissReactivation() }
+                                onDismissReactivation = { billingViewModel.dismissReactivation() },
+                                onNavigateToAccount = {
+                                    selectedTab = MainTab.ACCOUNT
+                                    if (authState.isLoggedIn && authState.profile == null) {
+                                        authViewModel.loadProfileAndHistory()
+                                    }
+                                }
                             )
                         }
                         BillingSubScreen.CHANNELS -> {
@@ -146,7 +160,8 @@ fun MainScreen(
                                             currentSubScreen = BillingSubScreen.DETAIL
                                         }
                                     )
-                                }
+                                },
+                                onRetry = { billingViewModel.loadPaymentChannels(forceRefresh = true) }
                             )
                         }
                         BillingSubScreen.DETAIL -> {
@@ -164,7 +179,15 @@ fun MainScreen(
                         onPhoneChanged = authViewModel::onPhoneChanged,
                         onPasswordChanged = authViewModel::onPasswordChanged,
                         onLoginClick = authViewModel::login,
-                        onLogoutClick = authViewModel::logout,
+                        onLogoutClick = {
+                            authViewModel.showLogoutConfirm(false)
+                            authViewModel.logout()
+                        },
+                        onRequestLogout = { authViewModel.showLogoutConfirm(true) },
+                        onDismissLogout = { authViewModel.showLogoutConfirm(false) },
+                        onRequestForgotPassword = { authViewModel.showForgotPassword(true) },
+                        onDismissForgotPassword = { authViewModel.showForgotPassword(false) },
+                        onSendResetPassword = { phone -> authViewModel.forgotPassword(phone) },
                         onRefresh = { authViewModel.loadProfileAndHistory() },
                         onPayFromHistory = { historyItem ->
                             val customerId = authState.profile?.customerId

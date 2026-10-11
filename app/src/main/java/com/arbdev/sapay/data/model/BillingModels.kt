@@ -78,6 +78,13 @@ data class ChangePackageListResponse(
 )
 
 @Serializable
+data class PaymentChannelsResponse(
+    @SerialName("statusCode") val statusCode: Int? = null,
+    @SerialName("message") val message: String? = null,
+    @SerialName("data") val data: List<PaymentChannelGroup> = emptyList()
+)
+
+@Serializable
 data class PaymentChannelGroup(
     @SerialName("id") val id: String? = null,
     @SerialName("name") val name: String? = null,

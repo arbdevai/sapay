@@ -20,11 +20,15 @@ data class AuthUiState(
     val isLoggedIn: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
+    val statusMessage: String? = null,
     val token: String? = null,
     val profile: UserProfile? = null,
     val isLoadingProfile: Boolean = false,
     val history: List<BillHistoryItem> = emptyList(),
-    val isLoadingHistory: Boolean = false
+    val isLoadingHistory: Boolean = false,
+    val isResettingPassword: Boolean = false,
+    val showForgotPasswordDialog: Boolean = false,
+    val showLogoutConfirmDialog: Boolean = false
 )
 
 class AuthViewModel(
@@ -62,6 +66,22 @@ class AuthViewModel(
         _uiState.value = _uiState.value.copy(passwordInput = value, errorMessage = null)
     }
 
+    fun showLogoutConfirm(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showLogoutConfirmDialog = show)
+    }
+
+    fun showForgotPassword(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showForgotPasswordDialog = show, errorMessage = null)
+    }
+
+    fun clearStatusMessage() {
+        _uiState.value = _uiState.value.copy(statusMessage = null)
+    }
+
+    fun clearErrorMessage() {
+        _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
     fun login() {
         val phone = _uiState.value.phoneInput.trim()
         val pass = _uiState.value.passwordInput.trim()
@@ -85,7 +105,8 @@ class AuthViewModel(
                         isLoading = false,
                         isLoggedIn = true,
                         token = token,
-                        passwordInput = ""
+                        passwordInput = "",
+                        statusMessage = "Login berhasil."
                     )
                     loadProfileAndHistory(token)
                 },
@@ -93,6 +114,34 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = error.message ?: "Login gagal. Periksa nomor HP dan password."
+                    )
+                }
+            )
+        }
+    }
+
+    fun forgotPassword(phone: String) {
+        val targetPhone = phone.trim().ifBlank { _uiState.value.phoneInput.trim() }
+        if (targetPhone.isBlank()) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Nomor HP harus diisi.")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isResettingPassword = true, errorMessage = null)
+            val result = repository.forgotPassword(targetPhone)
+            result.fold(
+                onSuccess = { msg ->
+                    _uiState.value = _uiState.value.copy(
+                        isResettingPassword = false,
+                        showForgotPasswordDialog = false,
+                        statusMessage = msg
+                    )
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isResettingPassword = false,
+                        errorMessage = error.message ?: "Gagal mengirim link reset password."
                     )
                 }
             )
@@ -122,10 +171,18 @@ class AuthViewModel(
                     }
                 },
                 onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoadingProfile = false,
-                        errorMessage = if (_uiState.value.profile == null) error.message else null
-                    )
+                    val errorMsg = error.message ?: "Gagal memuat profil"
+                    if (isAuthExpiredError(errorMsg)) {
+                        logout()
+                        _uiState.value = _uiState.value.copy(
+                            errorMessage = "Sesi telah berakhir. Silakan login kembali."
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoadingProfile = false,
+                            errorMessage = if (_uiState.value.profile == null) errorMsg else null
+                        )
+                    }
                 }
             )
         }
@@ -144,19 +201,41 @@ class AuthViewModel(
                     )
                 },
                 onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoadingHistory = false,
-                        errorMessage = error.message ?: "Gagal memuat riwayat transaksi"
-                    )
+                    val errorMsg = error.message ?: "Gagal memuat riwayat transaksi"
+                    if (isAuthExpiredError(errorMsg)) {
+                        logout()
+                        _uiState.value = _uiState.value.copy(
+                            errorMessage = "Sesi telah berakhir. Silakan login kembali."
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoadingHistory = false,
+                            errorMessage = errorMsg
+                        )
+                    }
                 }
             )
         }
     }
 
+    private fun isAuthExpiredError(msg: String): Boolean {
+        val lower = msg.lowercase()
+        return lower.contains("jwt malformed") ||
+                lower.contains("jwt expired") ||
+                lower.contains("unauthorized") ||
+                lower.contains("forbidden")
+    }
+
     fun logout() {
         viewModelScope.launch {
+            val currentToken = _uiState.value.token
+            if (!currentToken.isNullOrBlank()) {
+                repository.logout(currentToken)
+            }
             preferences.clearAuth()
-            _uiState.value = AuthUiState()
+            _uiState.value = AuthUiState(
+                statusMessage = "Anda telah berhasil keluar dari akun."
+            )
         }
     }
 }

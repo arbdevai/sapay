@@ -1,5 +1,6 @@
 package com.arbdev.sapay.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -41,12 +42,18 @@ fun AccountScreen(
     onPasswordChanged: (String) -> Unit,
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
+    onRequestLogout: () -> Unit,
+    onDismissLogout: () -> Unit,
+    onRequestForgotPassword: () -> Unit,
+    onDismissForgotPassword: () -> Unit,
+    onSendResetPassword: (String) -> Unit,
     onRefresh: () -> Unit,
     onPayFromHistory: (BillHistoryItem) -> Unit,
     onRenewPackageClick: (UserProfile) -> Unit,
     onCheckUpdateClick: () -> Unit
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
+    var resetPhoneInput by remember(state.phoneInput) { mutableStateOf(state.phoneInput) }
 
     LazyColumn(
         modifier = Modifier
@@ -64,16 +71,16 @@ fun AccountScreen(
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(46.dp)
                             .clip(CircleShape)
-                            .background(PrimaryBlueLight),
+                            .background(if (state.isLoggedIn) PrimaryBlueLight else PrimaryBlue.copy(alpha = 0.1f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Person,
+                            imageVector = if (state.isLoggedIn) Icons.Default.Person else Icons.Default.Lock,
                             contentDescription = null,
                             tint = PrimaryBlue
                         )
@@ -81,26 +88,49 @@ fun AccountScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = if (state.isLoggedIn) "Akun Starlite" else "Masuk Akun",
+                            text = if (state.isLoggedIn) "Akun Starlite" else "Login Akun",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
                         Text(
-                            text = if (state.isLoggedIn) "Detail layanan & riwayat tagihan" else "Login untuk melihat profil & invoice",
+                            text = if (state.isLoggedIn) {
+                                state.profile?.name ?: "Detail layanan & invoice"
+                            } else {
+                                "Masuk untuk cek paket & riwayat tagihan"
+                            },
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
+                            color = TextSecondary,
+                            maxLines = 1
                         )
                     }
                 }
 
                 if (state.isLoggedIn) {
-                    IconButton(onClick = onRefresh) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Muat Ulang",
-                            tint = PrimaryBlue
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onRefresh) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Muat Ulang",
+                                tint = PrimaryBlue
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        OutlinedButton(
+                            onClick = onRequestLogout,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
+                            border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Logout,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Keluar", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
                     }
                 }
             }
@@ -109,31 +139,50 @@ fun AccountScreen(
         if (!state.isLoggedIn) {
             item {
                 Card(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(22.dp),
                     colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Text(
-                            text = "Login Akun Starlite",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Gunakan nomor telepon dan password akun Starlite kamu untuk mengakses detail paket dan riwayat pembayaran.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
+                    Column(modifier = Modifier.padding(22.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(PrimaryBlueLight),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Wifi,
+                                    contentDescription = null,
+                                    tint = PrimaryBlue
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Login Starlite",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryBlueDark
+                                )
+                                Text(
+                                    text = "Gunakan nomor HP & password akun Anda",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
                         OutlinedTextField(
                             value = state.phoneInput,
-                            onValueChange = onPhoneChanged,
-                            label = { Text("Nomor HP") },
+                            onValueChange = { input ->
+                                onPhoneChanged(input.filter { it.isDigit() })
+                            },
+                            label = { Text("Nomor Handphone") },
                             placeholder = { Text("08123456789") },
                             leadingIcon = {
                                 Icon(Icons.Default.Phone, contentDescription = null, tint = PrimaryBlue)
@@ -144,12 +193,13 @@ fun AccountScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
                         OutlinedTextField(
                             value = state.passwordInput,
                             onValueChange = onPasswordChanged,
                             label = { Text("Password") },
+                            placeholder = { Text("Masukkan password akun") },
                             leadingIcon = {
                                 Icon(Icons.Default.Lock, contentDescription = null, tint = PrimaryBlue)
                             },
@@ -168,16 +218,42 @@ fun AccountScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        if (!state.errorMessage.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = state.errorMessage,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = ErrorRed
-                            )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = onRequestForgotPassword,
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Lupa Password?",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryBlue
+                                )
+                            }
                         }
 
-                        Spacer(modifier = Modifier.height(18.dp))
+                        if (!state.errorMessage.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Card(
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(containerColor = ErrorRedLight),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = state.errorMessage,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = ErrorRed,
+                                    modifier = Modifier.padding(12.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         Button(
                             onClick = onLoginClick,
@@ -186,16 +262,43 @@ fun AccountScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .height(50.dp)
                         ) {
                             if (state.isLoading) {
                                 CircularProgressIndicator(
                                     color = Color.White,
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp
+                                    modifier = Modifier.size(22.dp),
+                                    strokeWidth = 2.5.dp
                                 )
                             } else {
-                                Text("Masuk", fontWeight = FontWeight.Bold)
+                                Text("Masuk ke Akun", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = PrimaryBlueLight.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = PrimaryBlue,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Belum punya akun Starlite? Silakan mendaftar sebagai pelanggan di starliteindonesia.com",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = PrimaryBlueDark,
+                                    lineHeight = 18.sp
+                                )
                             }
                         }
                     }
@@ -209,7 +312,7 @@ fun AccountScreen(
                     UserProfileDetailsCard(
                         profile = profile,
                         onRenewPackage = { onRenewPackageClick(profile) },
-                        onLogout = onLogoutClick
+                        onLogout = onRequestLogout
                     )
                     Spacer(modifier = Modifier.height(20.dp))
                 }
@@ -223,10 +326,76 @@ fun AccountScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(32.dp),
+                                .padding(36.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(color = PrimaryBlue)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+            } else {
+                // Profile null and not loading (e.g. error loading profile)
+                item {
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardSurface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(22.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ErrorOutline,
+                                contentDescription = null,
+                                tint = ErrorRed,
+                                modifier = Modifier.size(44.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Gagal Memuat Profil Akun",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = state.errorMessage ?: "Terjadi kesalahan saat memuat data profil akun Anda.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                            Spacer(modifier = Modifier.height(18.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = onRequestLogout,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
+                                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.6f)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Logout,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Keluar Akun")
+                                }
+                                Button(
+                                    onClick = onRefresh,
+                                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Coba Lagi")
+                                }
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(20.dp))
@@ -332,6 +501,120 @@ fun AccountScreen(
                 }
             }
         }
+    }
+
+    if (state.showLogoutConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = onDismissLogout,
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Logout,
+                    contentDescription = null,
+                    tint = ErrorRed,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Keluar dari Akun?",
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = "Apakah Anda yakin ingin keluar dari akun Starlite? Anda harus memasukkan nomor HP dan password kembali untuk melihat invoice dan profil Anda.",
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = onLogoutClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Ya, Keluar", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = onDismissLogout,
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    if (state.showForgotPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = onDismissForgotPassword,
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.LockReset,
+                    contentDescription = null,
+                    tint = PrimaryBlue,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Lupa Password Akun",
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Masukkan nomor handphone akun Starlite Anda. Sistem akan mengirim link reset password resmi via WhatsApp:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    OutlinedTextField(
+                        value = resetPhoneInput,
+                        onValueChange = { resetPhoneInput = it.filter { ch -> ch.isDigit() } },
+                        label = { Text("Nomor Handphone") },
+                        placeholder = { Text("08123456789") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Phone, contentDescription = null, tint = PrimaryBlue)
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onSendResetPassword(resetPhoneInput) },
+                    enabled = !state.isResettingPassword && resetPhoneInput.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    if (state.isResettingPassword) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Kirim Link WA", fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = onDismissForgotPassword,
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Batal")
+                }
+            }
+        )
     }
 }
 
@@ -515,11 +798,22 @@ fun UserProfileDetailsCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            TextButton(
+            OutlinedButton(
                 onClick = onLogout,
-                modifier = Modifier.fillMaxWidth()
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
+                border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
             ) {
-                Text("Keluar Akun", color = ErrorRed)
+                Icon(
+                    imageVector = Icons.Default.Logout,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Keluar dari Akun Starlite", fontWeight = FontWeight.Bold)
             }
         }
     }

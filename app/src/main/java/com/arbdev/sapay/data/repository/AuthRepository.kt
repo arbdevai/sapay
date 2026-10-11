@@ -37,6 +37,30 @@ class AuthRepository(private val api: StarliteApi) {
         }
     }
 
+    suspend fun forgotPassword(creds: String): Result<String> {
+        return try {
+            val response = api.forgotPassword(CheckPasswordRequest(creds = creds))
+            if (response.isSuccessful) {
+                Result.success(response.body()?.message ?: "Link reset password telah dikirim ke WhatsApp Anda.")
+            } else {
+                val errorMsg = parseErrorMessage(response.errorBody()?.string())
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun logout(token: String): Result<Unit> {
+        return try {
+            val formattedToken = if (token.startsWith("Bearer ")) token else "Bearer $token"
+            api.logout(token = formattedToken)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.success(Unit)
+        }
+    }
+
     suspend fun getProfile(token: String): Result<UserProfile> {
         return try {
             val formattedToken = if (token.startsWith("Bearer ")) token else "Bearer $token"

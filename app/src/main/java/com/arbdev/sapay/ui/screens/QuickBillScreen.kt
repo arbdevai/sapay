@@ -43,7 +43,8 @@ fun QuickBillScreen(
     onProceedToPayment: () -> Unit,
     onViewCurrentPayment: () -> Unit,
     onReactivateClick: () -> Unit,
-    onDismissReactivation: () -> Unit
+    onDismissReactivation: () -> Unit,
+    onNavigateToAccount: () -> Unit = {}
 ) {
     val focusManager = LocalFocusManager.current
     val scrollState = rememberScrollState()
@@ -113,7 +114,62 @@ fun QuickBillScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Quick Account Navigation Banner
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = CardSurface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, BorderColor, RoundedCornerShape(16.dp))
+                .clickable(onClick = onNavigateToAccount)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(PrimaryBlueLight),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        tint = PrimaryBlue,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Masuk ke Akun Starlite",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryBlueDark
+                    )
+                    Text(
+                        text = "Kelola paket, lihat profil, & riwayat invoice lengkap",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
 
         // Search Input Card
         Card(
