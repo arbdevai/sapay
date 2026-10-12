@@ -169,7 +169,11 @@ fun MainScreen(
                             PaymentDetailScreen(
                                 state = billingState,
                                 onBackClick = { currentSubScreen = BillingSubScreen.DASHBOARD },
-                                onCheckStatus = billingViewModel::checkPaymentStatus
+                                onCheckStatus = billingViewModel::checkPaymentStatus,
+                                onSaveStoreConfig = billingViewModel::saveStoreConfig,
+                                onShowNotification = { msg, type ->
+                                    currentNotification = InAppNotificationData(message = msg, type = type)
+                                }
                             )
                         }
                     }
@@ -211,7 +215,12 @@ fun MainScreen(
                                 currentSubScreen = BillingSubScreen.DASHBOARD
                             }
                         },
-                        onCheckUpdateClick = { updateViewModel.checkForUpdate(manual = true) }
+                        onCheckUpdateClick = { updateViewModel.checkForUpdate(manual = true) },
+                        storeConfig = billingState.storeConfig,
+                        onSaveStoreConfig = billingViewModel::saveStoreConfig,
+                        onShowNotification = { msg, type ->
+                            currentNotification = InAppNotificationData(message = msg, type = type)
+                        }
                     )
                 }
             }

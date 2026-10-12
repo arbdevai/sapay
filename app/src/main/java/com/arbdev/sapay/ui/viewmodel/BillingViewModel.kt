@@ -27,7 +27,8 @@ data class BillingUiState(
     val currentPayment: CurrentPaymentResult? = null,
     val isCheckingStatus: Boolean = false,
     val isPaymentSuccess: Boolean = false,
-    val statusMessage: String? = null
+    val statusMessage: String? = null,
+    val storeConfig: StoreConfig = StoreConfig()
 )
 
 class BillingViewModel(
@@ -40,6 +41,25 @@ class BillingViewModel(
 
     init {
         loadSavedCustomer()
+        observeStoreConfig()
+    }
+
+    private fun observeStoreConfig() {
+        viewModelScope.launch {
+            preferences.storeConfig.collect { config ->
+                _uiState.value = _uiState.value.copy(storeConfig = config)
+            }
+        }
+    }
+
+    fun saveStoreConfig(config: StoreConfig) {
+        viewModelScope.launch {
+            preferences.saveStoreConfig(config)
+        }
+    }
+
+    fun setStatusMessage(msg: String) {
+        _uiState.value = _uiState.value.copy(statusMessage = msg)
     }
 
     private fun loadSavedCustomer() {

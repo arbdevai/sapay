@@ -26,10 +26,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.arbdev.sapay.data.model.ReceiptData
+import com.arbdev.sapay.data.model.StoreConfig
+import com.arbdev.sapay.ui.components.NotificationType
+import com.arbdev.sapay.ui.components.ReceiptPreviewModal
 import com.arbdev.sapay.ui.theme.*
+import com.arbdev.sapay.ui.util.QrisDownloadUtil
 import com.arbdev.sapay.ui.util.QrCodeGenerator
 import com.arbdev.sapay.ui.viewmodel.BillingUiState
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,12 +44,15 @@ import java.util.Locale
 fun PaymentDetailScreen(
     state: BillingUiState,
     onBackClick: () -> Unit,
-    onCheckStatus: (String) -> Unit
+    onCheckStatus: (String) -> Unit,
+    onSaveStoreConfig: (StoreConfig) -> Unit = {},
+    onShowNotification: (String, NotificationType) -> Unit = { _, _ -> }
 ) {
     BackHandler(onBack = onBackClick)
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val payment = state.currentPayment
+    var showReceiptModal by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -155,8 +165,32 @@ fun PaymentDetailScreen(
                             textAlign = TextAlign.Center,
                             color = TextPrimary
                         )
+
+                        Spacer(modifier = Modifier.height(18.dp))
+                        Button(
+                            onClick = { showReceiptModal = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ReceiptLong,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Cetak Nota / Struk Kasir",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
+                // Jika pembayaran sudah sukses, jangan render petunjuk transfer lagi
                 return@Column
             }
 
@@ -171,7 +205,14 @@ fun PaymentDetailScreen(
                     ?: payment.paymentPayload?.actions?.firstOrNull()?.value
                     ?: ""
 
-                QrisPaymentCard(qrisPayload = qrisPayload)
+                QrisPaymentCard(
+                    qrisPayload = qrisPayload,
+                    customerName = state.customerInfo?.name ?: "",
+                    customerId = state.customerInfo?.customerId ?: state.queryInput,
+                    amount = payment.grandTotal ?: 0.0,
+                    trxCode = payment.trxCode ?: "",
+                    onShowNotification = onShowNotification
+                )
             } else if (isVa) {
                 val vaNumber = payment.va?.va ?: payment.paymentNumber ?: ""
                 VaPaymentCard(
@@ -256,14 +297,76 @@ fun PaymentDetailScreen(
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Tombol Pratinjau Nota untuk Kasir
+                    OutlinedButton(
+                        onClick = { showReceiptModal = true },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ReceiptLong,
+                            contentDescription = null,
+                            tint = PrimaryBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Pratinjau & Cetak Nota Kasir",
+                            fontWeight = FontWeight.SemiBold,
+                            color = PrimaryBlue
+                        )
+                    }
                 }
             }
         }
     }
+
+    if (showReceiptModal && payment != null) {
+        val todayStr = SimpleDateFormat("dd MMM yyyy HH:mm", Locale("id", "ID")).format(Date())
+        ReceiptPreviewModal(
+            receiptData = ReceiptData(
+                storeName = state.storeConfig.storeName,
+                storeAddress = state.storeConfig.storeAddress,
+                storePhone = state.storeConfig.storePhone,
+                storeLogoPath = state.storeConfig.storeLogoUri,
+                trxCode = payment.trxCode ?: "-",
+                paymentDate = todayStr,
+                customerId = state.customerInfo?.customerId ?: state.queryInput,
+                customerName = state.customerInfo?.name ?: "Pelanggan Starlite",
+                packageName = state.selectedPackage?.packageName ?: state.customerInfo?.activePackage?.packageName ?: "Paket Internet",
+                billingPeriod = state.customerInfo?.billingPeriod ?: "",
+                packageAmount = state.customerInfo?.totalAmount ?: payment.grandTotal ?: 0.0,
+                channelFee = payment.adminFee ?: 0.0,
+                customAdminFee = state.storeConfig.customAdminFee,
+                totalAmount = (payment.grandTotal ?: 0.0) + state.storeConfig.customAdminFee,
+                paymentMethod = payment.paymentMethod ?: "Online",
+                status = if (state.isPaymentSuccess || payment.paymentStatus == "settle") "LUNAS" else "PENDING",
+                footerMessage = state.storeConfig.storeFooter
+            ),
+            storeConfig = state.storeConfig,
+            onDismiss = { showReceiptModal = false },
+            onSaveStoreConfig = onSaveStoreConfig,
+            onShowNotification = onShowNotification
+        )
+    }
 }
 
 @Composable
-fun QrisPaymentCard(qrisPayload: String) {
+fun QrisPaymentCard(
+    qrisPayload: String,
+    customerName: String = "",
+    customerId: String = "",
+    amount: Double = 0.0,
+    trxCode: String = "",
+    onShowNotification: (String, NotificationType) -> Unit = { _, _ -> }
+) {
+    val context = LocalContext.current
+
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
@@ -315,6 +418,91 @@ fun QrisPaymentCard(qrisPayload: String) {
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Tombol Unduh & Bagikan QRIS
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            val poster = QrisDownloadUtil.createQrisPosterBitmap(
+                                qrBitmap = bitmap,
+                                customerName = customerName,
+                                customerId = customerId,
+                                amount = amount,
+                                trxCode = trxCode
+                            )
+                            val saveResult = QrisDownloadUtil.saveQrisToGallery(context, poster, trxCode)
+                            if (saveResult.isSuccess) {
+                                onShowNotification("Gambar QRIS berhasil disimpan ke Galeri!", NotificationType.SUCCESS)
+                            } else {
+                                onShowNotification(
+                                    saveResult.exceptionOrNull()?.message ?: "Gagal menyimpan QRIS",
+                                    NotificationType.ERROR
+                                )
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = null,
+                            tint = PrimaryBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Unduh QRIS",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PrimaryBlue
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            val poster = QrisDownloadUtil.createQrisPosterBitmap(
+                                qrBitmap = bitmap,
+                                customerName = customerName,
+                                customerId = customerId,
+                                amount = amount,
+                                trxCode = trxCode
+                            )
+                            val caption = "Kode QRIS Pembayaran WiFi Starlite\nAtas Nama: $customerName ($customerId)\nTotal Tagihan: ${NumberFormat.getCurrencyInstance(Locale("id", "ID")).format(amount)}"
+                            val shareResult = QrisDownloadUtil.shareQrisImage(context, poster, caption)
+                            if (!shareResult.isSuccess) {
+                                onShowNotification(
+                                    shareResult.exceptionOrNull()?.message ?: "Gagal membagikan QRIS",
+                                    NotificationType.ERROR
+                                )
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Chat,
+                            contentDescription = null,
+                            tint = Color(0xFF16A34A),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Kirim ke WA",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                    }
+                }
             } else {
                 Box(
                     modifier = Modifier
@@ -327,7 +515,7 @@ fun QrisPaymentCard(qrisPayload: String) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             Text(
                 text = "Dukungan: BCA, Mandiri Livin, BRImo, BNI, GoPay, OVO, Dana, ShopeePay, LinkAja",

@@ -25,7 +25,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arbdev.sapay.BuildConfig
 import com.arbdev.sapay.data.model.BillHistoryItem
+import com.arbdev.sapay.data.model.ReceiptData
+import com.arbdev.sapay.data.model.StoreConfig
 import com.arbdev.sapay.data.model.UserProfile
+import com.arbdev.sapay.ui.components.NotificationType
+import com.arbdev.sapay.ui.components.ReceiptPreviewModal
 import com.arbdev.sapay.ui.theme.*
 import com.arbdev.sapay.ui.viewmodel.AuthUiState
 import java.text.NumberFormat
@@ -50,10 +54,14 @@ fun AccountScreen(
     onRefresh: () -> Unit,
     onPayFromHistory: (BillHistoryItem) -> Unit,
     onRenewPackageClick: (UserProfile) -> Unit,
-    onCheckUpdateClick: () -> Unit
+    onCheckUpdateClick: () -> Unit,
+    storeConfig: StoreConfig = StoreConfig(),
+    onSaveStoreConfig: (StoreConfig) -> Unit = {},
+    onShowNotification: (String, NotificationType) -> Unit = { _, _ -> }
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
     var resetPhoneInput by remember(state.phoneInput) { mutableStateOf(state.phoneInput) }
+    var selectedReceiptItem by remember { mutableStateOf<BillHistoryItem?>(null) }
 
     LazyColumn(
         modifier = Modifier
@@ -452,7 +460,8 @@ fun AccountScreen(
                 items(state.history) { item ->
                     WebHistoryItemCard(
                         item = item,
-                        onPayClick = { onPayFromHistory(item) }
+                        onPayClick = { onPayFromHistory(item) },
+                        onPrintReceiptClick = { selectedReceiptItem = item }
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                 }
@@ -614,6 +623,42 @@ fun AccountScreen(
                     Text("Batal")
                 }
             }
+        )
+    }
+
+    if (selectedReceiptItem != null) {
+        val item = selectedReceiptItem!!
+        val packageName = item.regionalPackage?.packageInfo?.name ?: item.regionalPackage?.name ?: "Paket Internet WiFi"
+        val settlementDate = formatIndonesianDate(item.settlementDate, withTime = true)
+        val dueDate = formatIndonesianDate(item.dueDate, withTime = false)
+        val customerId = state.profile?.customerId ?: state.phoneInput
+        val customerName = state.profile?.name ?: "Pelanggan Starlite"
+        val amount = item.amount ?: item.regionalPackage?.price ?: 0.0
+
+        ReceiptPreviewModal(
+            receiptData = ReceiptData(
+                storeName = storeConfig.storeName,
+                storeAddress = storeConfig.storeAddress,
+                storePhone = storeConfig.storePhone,
+                storeLogoPath = storeConfig.storeLogoUri,
+                trxCode = item.code ?: "INV-${item.id?.take(8) ?: System.currentTimeMillis()}",
+                paymentDate = if (settlementDate != "-") settlementDate else dueDate,
+                customerId = customerId,
+                customerName = customerName,
+                packageName = packageName,
+                billingPeriod = dueDate,
+                packageAmount = amount,
+                channelFee = 0.0,
+                customAdminFee = storeConfig.customAdminFee,
+                totalAmount = amount + storeConfig.customAdminFee,
+                paymentMethod = "Lunas",
+                status = "LUNAS",
+                footerMessage = storeConfig.storeFooter
+            ),
+            storeConfig = storeConfig,
+            onDismiss = { selectedReceiptItem = null },
+            onSaveStoreConfig = onSaveStoreConfig,
+            onShowNotification = onShowNotification
         )
     }
 }
@@ -817,7 +862,8 @@ fun UserProfileDetailsCard(
 @Composable
 fun WebHistoryItemCard(
     item: BillHistoryItem,
-    onPayClick: () -> Unit
+    onPayClick: () -> Unit,
+    onPrintReceiptClick: (() -> Unit)? = null
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -933,6 +979,28 @@ fun WebHistoryItemCard(
                         .height(42.dp)
                 ) {
                     Text("Bayar Sekarang", fontWeight = FontWeight.Bold)
+                }
+            } else if (onPrintReceiptClick != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = onPrintReceiptClick,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ReceiptLong,
+                        contentDescription = null,
+                        tint = PrimaryBlue,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Cetak Nota / Struk Kasir",
+                        fontWeight = FontWeight.SemiBold,
+                        color = PrimaryBlue
+                    )
                 }
             }
         }
