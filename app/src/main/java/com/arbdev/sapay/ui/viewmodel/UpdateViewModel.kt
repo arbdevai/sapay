@@ -48,7 +48,8 @@ class UpdateViewModel(
                             isChecking = false,
                             latestRelease = release,
                             updateAvailable = true,
-                            showChangelogDialog = true
+                            showChangelogDialog = true,
+                            infoMessage = "Pembaruan versi ${release.tagName} tersedia!"
                         )
                     } else {
                         _uiState.value = _uiState.value.copy(

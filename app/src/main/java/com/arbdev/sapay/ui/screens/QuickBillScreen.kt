@@ -1,5 +1,6 @@
 package com.arbdev.sapay.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.arbdev.sapay.data.model.CustomerInfo
 import com.arbdev.sapay.data.model.RegionalPackage
+import com.arbdev.sapay.ui.components.BannerCarousel
 import com.arbdev.sapay.ui.theme.*
 import com.arbdev.sapay.ui.viewmodel.BillingUiState
 import java.text.NumberFormat
@@ -36,6 +38,9 @@ import java.util.Locale
 @Composable
 fun QuickBillScreen(
     state: BillingUiState,
+    updateAvailable: Boolean = false,
+    latestReleaseTag: String? = null,
+    onUpdateClick: () -> Unit = {},
     onQueryChanged: (String) -> Unit,
     onCheckBill: () -> Unit,
     onConfirmCheckboxChanged: (Boolean) -> Unit,
@@ -112,6 +117,70 @@ fun QuickBillScreen(
                     lineHeight = 18.sp
                 )
             }
+        }
+
+        // In-App Update Notice Banner (if new version detected)
+        if (updateAvailable) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                border = BorderStroke(1.dp, Color(0xFFF59E0B)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onUpdateClick)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFDE68A)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            tint = Color(0xFFB45309),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Pembaruan Versi ${latestReleaseTag ?: "Baru"} Tersedia",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF92400E)
+                        )
+                        Text(
+                            text = "Sentuh untuk mengunduh & memasang fitur terbaru.",
+                            fontSize = 11.5.sp,
+                            color = Color(0xFFB45309)
+                        )
+                    }
+                    Button(
+                        onClick = onUpdateClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Text("Update", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+        }
+
+        // Web Starlite Image Slider / Promo Carousel
+        if (state.banners.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(14.dp))
+            BannerCarousel(banners = state.banners)
         }
 
         Spacer(modifier = Modifier.height(14.dp))

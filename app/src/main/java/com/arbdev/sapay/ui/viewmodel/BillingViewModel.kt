@@ -28,7 +28,9 @@ data class BillingUiState(
     val isCheckingStatus: Boolean = false,
     val isPaymentSuccess: Boolean = false,
     val statusMessage: String? = null,
-    val storeConfig: StoreConfig = StoreConfig()
+    val storeConfig: StoreConfig = StoreConfig(),
+    val banners: List<BannerItem> = defaultPromoBanners,
+    val isLoadingBanners: Boolean = false
 )
 
 class BillingViewModel(
@@ -42,6 +44,7 @@ class BillingViewModel(
     init {
         loadSavedCustomer()
         observeStoreConfig()
+        loadBanners()
     }
 
     private fun observeStoreConfig() {
@@ -60,6 +63,27 @@ class BillingViewModel(
 
     fun setStatusMessage(msg: String) {
         _uiState.value = _uiState.value.copy(statusMessage = msg)
+    }
+
+    fun loadBanners() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingBanners = true)
+            val result = repository.getBanners()
+            result.fold(
+                onSuccess = { bannerList ->
+                    _uiState.value = _uiState.value.copy(
+                        banners = if (bannerList.isNotEmpty()) bannerList else defaultPromoBanners,
+                        isLoadingBanners = false
+                    )
+                },
+                onFailure = {
+                    _uiState.value = _uiState.value.copy(
+                        banners = defaultPromoBanners,
+                        isLoadingBanners = false
+                    )
+                }
+            )
+        }
     }
 
     private fun loadSavedCustomer() {

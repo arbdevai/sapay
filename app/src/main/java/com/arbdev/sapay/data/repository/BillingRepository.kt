@@ -57,6 +57,24 @@ class BillingRepository(private val api: StarliteApi) {
         }
     }
 
+    suspend fun getBanners(): Result<List<BannerItem>> {
+        return try {
+            val response = api.getBanners()
+            if (response.isSuccessful && response.body() != null) {
+                val list = response.body()!!.data.filter { it.status == "publish" || it.status == null }
+                if (list.isNotEmpty()) {
+                    Result.success(list)
+                } else {
+                    Result.success(defaultPromoBanners)
+                }
+            } else {
+                Result.success(defaultPromoBanners)
+            }
+        } catch (e: Exception) {
+            Result.success(defaultPromoBanners)
+        }
+    }
+
     suspend fun getPaymentChannels(): Result<List<PaymentChannelGroup>> {
         return try {
             val response = api.getPaymentChannels()

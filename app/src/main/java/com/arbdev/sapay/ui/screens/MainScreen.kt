@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.arbdev.sapay.ui.components.InAppNotificationBanner
 import com.arbdev.sapay.ui.components.InAppNotificationData
 import com.arbdev.sapay.ui.components.NotificationType
@@ -61,6 +62,13 @@ fun MainScreen(
     }
 
     var currentNotification by remember { mutableStateOf<InAppNotificationData?>(null) }
+
+    // Always automatically check for update & reload fresh banners on app resume
+    LifecycleResumeEffect(Unit) {
+        updateViewModel.checkForUpdate(manual = false)
+        billingViewModel.loadBanners()
+        onPauseOrDispose { }
+    }
 
     LaunchedEffect(updateState.infoMessage) {
         val msg = updateState.infoMessage
@@ -129,6 +137,9 @@ fun MainScreen(
                         BillingSubScreen.DASHBOARD -> {
                             QuickBillScreen(
                                 state = billingState,
+                                updateAvailable = updateState.updateAvailable,
+                                latestReleaseTag = updateState.latestRelease?.tagName,
+                                onUpdateClick = { updateViewModel.showChangelog(true) },
                                 onQueryChanged = billingViewModel::onQueryChanged,
                                 onCheckBill = { billingViewModel.checkBill() },
                                 onConfirmCheckboxChanged = billingViewModel::onConfirmCheckboxChanged,

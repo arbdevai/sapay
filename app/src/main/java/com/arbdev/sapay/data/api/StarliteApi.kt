@@ -23,6 +23,9 @@ interface StarliteApi {
         @Query("mitra_id") mitraId: String? = null
     ): Response<ChangePackageListResponse>
 
+    @GET("app/banner/device")
+    suspend fun getBanners(): Response<BannerResponse>
+
     @GET("app/transaction/payment-channels")
     suspend fun getPaymentChannels(): Response<PaymentChannelsResponse>
 
