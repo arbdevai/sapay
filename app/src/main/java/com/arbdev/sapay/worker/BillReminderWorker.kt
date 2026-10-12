@@ -39,7 +39,7 @@ class BillReminderWorker(
             // 1. Cek riwayat tagihan jika pengguna login dengan akun terdaftar
             if (authToken.isNotBlank()) {
                 val authRepository = AuthRepository(ApiClient.starliteApi)
-                val historyResult = authRepository.getBillingHistory(authToken)
+                val historyResult = authRepository.getHistory(authToken)
                 val unpaid = historyResult.getOrNull()?.firstOrNull { it.isPaid == false }
 
                 if (unpaid != null) {
@@ -140,10 +140,10 @@ class BillReminderWorker(
                 .build()
 
             val periodicRequest = PeriodicWorkRequestBuilder<BillReminderWorker>(
-                repeatInterval = 12,
-                repeatIntervalTimeUnit = TimeUnit.HOURS,
-                flexTimeInterval = 2,
-                flexTimeIntervalTimeUnit = TimeUnit.HOURS
+                12L,
+                TimeUnit.HOURS,
+                2L,
+                TimeUnit.HOURS
             )
                 .setConstraints(constraints)
                 .build()
