@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer WiFi Arc (Electric Cyan) -->
+    <path
+        android:pathData="M32,40 A26,26 0 0,1 76,40"
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Middle WiFi Arc (Pure White) -->
+    <path
+        android:pathData="M40,49 A17,17 0 0,1 68,49"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Center WiFi Signal Dot (Pure White) -->
+    <path
+        android:pathData="M54,55 A3.5,3.5 0 1,1 54,54.9"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Fast Payment Lightning Bolt (Warm Electric Amber/Orange) -->
+    <path
+        android:pathData="M57,58 L44,73 L53,73 L50,84 L64,68 L55,68 Z"
+        android:fillColor="#FF9F0A" />
+
+    <!-- Subtle White Accent Trim on Lightning Bolt -->
+    <path
+        android:pathData="M57,58 L44,73 L53,73 Z"
+        android:fillColor="#FFE082" />
+
+</vector>

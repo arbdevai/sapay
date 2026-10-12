@@ -13,8 +13,8 @@ android {
         applicationId = "com.arbdev.sapay"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.0.9"
+        versionCode = 11
+        versionName = "1.0.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -100,6 +100,9 @@ dependencies {
 
     // QR Code Generation
     implementation(libs.zxing.core)
+
+    // WorkManager (Background Bill Reminder)
+    implementation(libs.androidx.work.runtime.ktx)
 
     testImplementation(libs.junit)
     debugImplementation(libs.androidx.compose.ui.tooling)

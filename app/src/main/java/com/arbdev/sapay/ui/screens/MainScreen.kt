@@ -206,118 +206,156 @@ fun MainScreen(
                     .fillMaxSize()
                     .padding(bottom = if (showNavBar) 84.dp else 0.dp)
             ) {
-                when (selectedTab) {
-                MainTab.BILLING -> {
-                    when (currentSubScreen) {
-                        BillingSubScreen.DASHBOARD -> {
-                            QuickBillScreen(
-                                state = billingState,
-                                updateAvailable = updateState.updateAvailable,
-                                latestReleaseTag = updateState.latestRelease?.tagName,
-                                onUpdateClick = { updateViewModel.showChangelog(true) },
-                                onQueryChanged = billingViewModel::onQueryChanged,
-                                onCheckBill = { billingViewModel.checkBill() },
-                                onConfirmCheckboxChanged = billingViewModel::onConfirmCheckboxChanged,
-                                onSelectPackage = billingViewModel::onSelectPackage,
-                                onProceedToPayment = {
-                                    billingViewModel.loadPaymentChannels()
-                                    currentSubScreen = BillingSubScreen.CHANNELS
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = {
+                        if (targetState == MainTab.ACCOUNT) {
+                            (slideInHorizontally(animationSpec = tween(280)) { it / 5 } + fadeIn(animationSpec = tween(240)))
+                                .togetherWith(slideOutHorizontally(animationSpec = tween(240)) { -it / 5 } + fadeOut(animationSpec = tween(200)))
+                        } else {
+                            (slideInHorizontally(animationSpec = tween(280)) { -it / 5 } + fadeIn(animationSpec = tween(240)))
+                                .togetherWith(slideOutHorizontally(animationSpec = tween(240)) { it / 5 } + fadeOut(animationSpec = tween(200)))
+                        }
+                    },
+                    label = "mainTabTransition"
+                ) { tab ->
+                    when (tab) {
+                        MainTab.BILLING -> {
+                            AnimatedContent(
+                                targetState = currentSubScreen,
+                                transitionSpec = {
+                                    val targetOrder = when (targetState) {
+                                        BillingSubScreen.DASHBOARD -> 0
+                                        BillingSubScreen.CHANNELS -> 1
+                                        BillingSubScreen.DETAIL -> 2
+                                    }
+                                    val initialOrder = when (initialState) {
+                                        BillingSubScreen.DASHBOARD -> 0
+                                        BillingSubScreen.CHANNELS -> 1
+                                        BillingSubScreen.DETAIL -> 2
+                                    }
+                                    if (targetOrder > initialOrder) {
+                                        (slideInHorizontally(animationSpec = tween(300)) { it / 3 } + fadeIn(animationSpec = tween(240)))
+                                            .togetherWith(slideOutHorizontally(animationSpec = tween(260)) { -it / 3 } + fadeOut(animationSpec = tween(200)))
+                                    } else {
+                                        (slideInHorizontally(animationSpec = tween(300)) { -it / 3 } + fadeIn(animationSpec = tween(240)))
+                                            .togetherWith(slideOutHorizontally(animationSpec = tween(260)) { it / 3 } + fadeOut(animationSpec = tween(200)))
+                                    }
                                 },
-                                onViewCurrentPayment = {
-                                    currentSubScreen = BillingSubScreen.DETAIL
-                                },
-                                onReactivateClick = { billingViewModel.reactivateCustomer() },
-                                onDismissReactivation = { billingViewModel.dismissReactivation() },
-                                onNavigateToAccount = {
-                                    selectedTab = MainTab.ACCOUNT
-                                    if (authState.isLoggedIn && authState.profile == null) {
-                                        authViewModel.loadProfileAndHistory()
+                                label = "subScreenTransition"
+                            ) { subScreen ->
+                                when (subScreen) {
+                                    BillingSubScreen.DASHBOARD -> {
+                                        QuickBillScreen(
+                                            state = billingState,
+                                            updateAvailable = updateState.updateAvailable,
+                                            latestReleaseTag = updateState.latestRelease?.tagName,
+                                            onUpdateClick = { updateViewModel.showChangelog(true) },
+                                            onQueryChanged = billingViewModel::onQueryChanged,
+                                            onCheckBill = { billingViewModel.checkBill() },
+                                            onConfirmCheckboxChanged = billingViewModel::onConfirmCheckboxChanged,
+                                            onSelectPackage = billingViewModel::onSelectPackage,
+                                            onProceedToPayment = {
+                                                billingViewModel.loadPaymentChannels()
+                                                currentSubScreen = BillingSubScreen.CHANNELS
+                                            },
+                                            onViewCurrentPayment = {
+                                                currentSubScreen = BillingSubScreen.DETAIL
+                                            },
+                                            onReactivateClick = { billingViewModel.reactivateCustomer() },
+                                            onDismissReactivation = { billingViewModel.dismissReactivation() },
+                                            onNavigateToAccount = {
+                                                selectedTab = MainTab.ACCOUNT
+                                                if (authState.isLoggedIn && authState.profile == null) {
+                                                    authViewModel.loadProfileAndHistory()
+                                                }
+                                            }
+                                        )
+                                    }
+                                    BillingSubScreen.CHANNELS -> {
+                                        PaymentChannelScreen(
+                                            state = billingState,
+                                            onBackClick = { currentSubScreen = BillingSubScreen.DASHBOARD },
+                                            onSelectChannel = billingViewModel::selectChannel,
+                                            onConfirmPayment = {
+                                                billingViewModel.processPayment(
+                                                    onReadyToPay = {
+                                                        currentSubScreen = BillingSubScreen.DETAIL
+                                                    }
+                                                )
+                                            },
+                                            onRetry = { billingViewModel.loadPaymentChannels(forceRefresh = true) }
+                                        )
+                                    }
+                                    BillingSubScreen.DETAIL -> {
+                                        PaymentDetailScreen(
+                                            state = billingState,
+                                            onBackClick = { currentSubScreen = BillingSubScreen.DASHBOARD },
+                                            onCheckStatus = billingViewModel::checkPaymentStatus,
+                                            onSaveStoreConfig = billingViewModel::saveStoreConfig,
+                                            onShowNotification = { msg, type ->
+                                                currentNotification = InAppNotificationData(message = msg, type = type)
+                                            }
+                                        )
                                     }
                                 }
-                            )
+                            }
                         }
-                        BillingSubScreen.CHANNELS -> {
-                            PaymentChannelScreen(
-                                state = billingState,
-                                onBackClick = { currentSubScreen = BillingSubScreen.DASHBOARD },
-                                onSelectChannel = billingViewModel::selectChannel,
-                                onConfirmPayment = {
-                                    billingViewModel.processPayment(
-                                        onReadyToPay = {
-                                            currentSubScreen = BillingSubScreen.DETAIL
-                                        }
-                                    )
+                        MainTab.ACCOUNT -> {
+                            AccountScreen(
+                                state = authState,
+                                onPhoneChanged = authViewModel::onPhoneChanged,
+                                onPasswordChanged = authViewModel::onPasswordChanged,
+                                onLoginClick = authViewModel::login,
+                                onLogoutClick = {
+                                    authViewModel.showLogoutConfirm(false)
+                                    authViewModel.logout()
                                 },
-                                onRetry = { billingViewModel.loadPaymentChannels(forceRefresh = true) }
-                            )
-                        }
-                        BillingSubScreen.DETAIL -> {
-                            PaymentDetailScreen(
-                                state = billingState,
-                                onBackClick = { currentSubScreen = BillingSubScreen.DASHBOARD },
-                                onCheckStatus = billingViewModel::checkPaymentStatus,
+                                onRequestLogout = { authViewModel.showLogoutConfirm(true) },
+                                onDismissLogout = { authViewModel.showLogoutConfirm(false) },
+                                onRequestForgotPassword = { authViewModel.showForgotPassword(true) },
+                                onDismissForgotPassword = { authViewModel.showForgotPassword(false) },
+                                onSendResetPassword = { phone -> authViewModel.forgotPassword(phone) },
+                                onRefresh = { authViewModel.loadProfileAndHistory() },
+                                onPayFromHistory = { historyItem ->
+                                    val customerId = authState.profile?.customerId
+                                        ?: authState.phoneInput
+                                    if (customerId.isNotBlank()) {
+                                        billingViewModel.onQueryChanged(customerId)
+                                        billingViewModel.checkBill(customerId)
+                                        selectedTab = MainTab.BILLING
+                                        currentSubScreen = BillingSubScreen.DASHBOARD
+                                    }
+                                },
+                                onRenewPackageClick = { userProfile ->
+                                    val customerId = userProfile.customerId
+                                        ?: userProfile.phoneNumber
+                                        ?: ""
+                                    if (customerId.isNotBlank()) {
+                                        billingViewModel.onQueryChanged(customerId)
+                                        billingViewModel.checkBill(customerId)
+                                        selectedTab = MainTab.BILLING
+                                        currentSubScreen = BillingSubScreen.DASHBOARD
+                                    }
+                                },
+                                onCheckUpdateClick = { updateViewModel.checkForUpdate(manual = true) },
+                                storeConfig = billingState.storeConfig,
                                 onSaveStoreConfig = billingViewModel::saveStoreConfig,
                                 onShowNotification = { msg, type ->
                                     currentNotification = InAppNotificationData(message = msg, type = type)
+                                },
+                                hasNotificationPermission = hasNotificationPermission,
+                                onRequestNotificationPermission = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    } else {
+                                        showPermissionDialog = true
+                                    }
                                 }
                             )
                         }
                     }
                 }
-                MainTab.ACCOUNT -> {
-                    AccountScreen(
-                        state = authState,
-                        onPhoneChanged = authViewModel::onPhoneChanged,
-                        onPasswordChanged = authViewModel::onPasswordChanged,
-                        onLoginClick = authViewModel::login,
-                        onLogoutClick = {
-                            authViewModel.showLogoutConfirm(false)
-                            authViewModel.logout()
-                        },
-                        onRequestLogout = { authViewModel.showLogoutConfirm(true) },
-                        onDismissLogout = { authViewModel.showLogoutConfirm(false) },
-                        onRequestForgotPassword = { authViewModel.showForgotPassword(true) },
-                        onDismissForgotPassword = { authViewModel.showForgotPassword(false) },
-                        onSendResetPassword = { phone -> authViewModel.forgotPassword(phone) },
-                        onRefresh = { authViewModel.loadProfileAndHistory() },
-                        onPayFromHistory = { historyItem ->
-                            val customerId = authState.profile?.customerId
-                                ?: authState.phoneInput
-                            if (customerId.isNotBlank()) {
-                                billingViewModel.onQueryChanged(customerId)
-                                billingViewModel.checkBill(customerId)
-                                selectedTab = MainTab.BILLING
-                                currentSubScreen = BillingSubScreen.DASHBOARD
-                            }
-                        },
-                        onRenewPackageClick = { userProfile ->
-                            val customerId = userProfile.customerId
-                                ?: userProfile.phoneNumber
-                                ?: ""
-                            if (customerId.isNotBlank()) {
-                                billingViewModel.onQueryChanged(customerId)
-                                billingViewModel.checkBill(customerId)
-                                selectedTab = MainTab.BILLING
-                                currentSubScreen = BillingSubScreen.DASHBOARD
-                            }
-                        },
-                        onCheckUpdateClick = { updateViewModel.checkForUpdate(manual = true) },
-                        storeConfig = billingState.storeConfig,
-                        onSaveStoreConfig = billingViewModel::saveStoreConfig,
-                        onShowNotification = { msg, type ->
-                            currentNotification = InAppNotificationData(message = msg, type = type)
-                        },
-                        hasNotificationPermission = hasNotificationPermission,
-                        onRequestNotificationPermission = {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            } else {
-                                showPermissionDialog = true
-                            }
-                        }
-                    )
-                }
-            }
         }
 
         // Floating Capsule Navigation Bar (Animated Pill)
