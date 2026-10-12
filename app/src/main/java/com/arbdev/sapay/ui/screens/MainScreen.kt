@@ -102,9 +102,9 @@ fun MainScreen(
     }
 
     // Notifikasi status bar pengingat tagihan untuk akun pengguna yang sudah terdaftar / login
-    LaunchedEffect(authState.billHistory, authState.profile, hasNotificationPermission) {
+    LaunchedEffect(authState.history, authState.profile, hasNotificationPermission) {
         if (hasNotificationPermission) {
-            val unpaidBill = authState.billHistory.firstOrNull { it.isPaid == false }
+            val unpaidBill = authState.history.firstOrNull { it.isPaid == false }
             if (unpaidBill != null) {
                 val customerName = authState.profile?.name ?: "Pelanggan Starlite"
                 val customerId = authState.profile?.customerId ?: authState.phoneInput
