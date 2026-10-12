@@ -328,6 +328,14 @@ fun PaymentDetailScreen(
 
     if (showReceiptModal && payment != null) {
         val todayStr = SimpleDateFormat("dd MMM yyyy HH:mm", Locale("id", "ID")).format(Date())
+        val pkg = state.selectedPackage ?: state.customerInfo?.activeRegionalPackage ?: state.customerInfo?.regionalPackage
+        val packageName = pkg?.packageInfo?.name ?: pkg?.name ?: "Paket Internet Starlite"
+        val packagePrice = pkg?.price ?: payment.grandTotal ?: 0.0
+        val channelFee = ((payment.grandTotal ?: 0.0) - packagePrice).coerceAtLeast(0.0)
+        val billingPeriod = state.customerInfo?.activePackageExpireDate ?: ""
+        val customAdminFee = state.storeConfig.customAdminFee
+        val totalAmount = (payment.grandTotal ?: packagePrice) + customAdminFee
+
         ReceiptPreviewModal(
             receiptData = ReceiptData(
                 storeName = state.storeConfig.storeName,
@@ -338,12 +346,12 @@ fun PaymentDetailScreen(
                 paymentDate = todayStr,
                 customerId = state.customerInfo?.customerId ?: state.queryInput,
                 customerName = state.customerInfo?.name ?: "Pelanggan Starlite",
-                packageName = state.selectedPackage?.packageName ?: state.customerInfo?.activePackage?.packageName ?: "Paket Internet",
-                billingPeriod = state.customerInfo?.billingPeriod ?: "",
-                packageAmount = state.customerInfo?.totalAmount ?: payment.grandTotal ?: 0.0,
-                channelFee = payment.adminFee ?: 0.0,
-                customAdminFee = state.storeConfig.customAdminFee,
-                totalAmount = (payment.grandTotal ?: 0.0) + state.storeConfig.customAdminFee,
+                packageName = packageName,
+                billingPeriod = billingPeriod,
+                packageAmount = packagePrice,
+                channelFee = channelFee,
+                customAdminFee = customAdminFee,
+                totalAmount = totalAmount,
                 paymentMethod = payment.paymentMethod ?: "Online",
                 status = if (state.isPaymentSuccess || payment.paymentStatus == "settle") "LUNAS" else "PENDING",
                 footerMessage = state.storeConfig.storeFooter

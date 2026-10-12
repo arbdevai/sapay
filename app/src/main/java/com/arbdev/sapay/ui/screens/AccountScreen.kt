@@ -629,7 +629,8 @@ fun AccountScreen(
     if (selectedReceiptItem != null) {
         val item = selectedReceiptItem!!
         val packageName = item.regionalPackage?.packageInfo?.name ?: item.regionalPackage?.name ?: "Paket Internet WiFi"
-        val settlementDate = formatIndonesianDate(item.settlementDate, withTime = true)
+        val rawSettlementDate = item.transactionList.firstOrNull()?.settlementDate
+        val settlementDate = formatIndonesianDate(rawSettlementDate, withTime = true)
         val dueDate = formatIndonesianDate(item.dueDate, withTime = false)
         val customerId = state.profile?.customerId ?: state.phoneInput
         val customerName = state.profile?.name ?: "Pelanggan Starlite"
