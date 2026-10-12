@@ -57,7 +57,9 @@ fun AccountScreen(
     onCheckUpdateClick: () -> Unit,
     storeConfig: StoreConfig = StoreConfig(),
     onSaveStoreConfig: (StoreConfig) -> Unit = {},
-    onShowNotification: (String, NotificationType) -> Unit = { _, _ -> }
+    onShowNotification: (String, NotificationType) -> Unit = { _, _ -> },
+    hasNotificationPermission: Boolean = false,
+    onRequestNotificationPermission: () -> Unit = {}
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
     var resetPhoneInput by remember(state.phoneInput) { mutableStateOf(state.phoneInput) }
@@ -469,7 +471,78 @@ fun AccountScreen(
         }
 
         item {
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Notification Permission & Status Card
+            Card(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = CardSurface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(if (hasNotificationPermission) SuccessGreenLight else Color(0xFFFEF3C7)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (hasNotificationPermission) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff,
+                                contentDescription = null,
+                                tint = if (hasNotificationPermission) SuccessGreen else Color(0xFFD97706),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Notifikasi Pengingat Tagihan",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = if (hasNotificationPermission) "Aktif di Status Bar" else "Belum Diaktifkan",
+                                fontSize = 12.sp,
+                                color = if (hasNotificationPermission) SuccessGreen else Color(0xFFD97706),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Pengingat jatuh tempo otomatis di status bar HP saat ada tagihan WiFi Starlite yang belum dibayar.",
+                        fontSize = 11.5.sp,
+                        color = TextSecondary,
+                        lineHeight = 16.sp
+                    )
+
+                    if (!hasNotificationPermission) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = onRequestNotificationPermission,
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Aktifkan Izin Notifikasi", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(14.dp))
 
             // App Version & In-App Updater Section
             Card(

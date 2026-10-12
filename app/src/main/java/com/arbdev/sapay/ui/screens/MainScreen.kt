@@ -1,6 +1,10 @@
 package com.arbdev.sapay.ui.screens
 
+import android.Manifest
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -28,7 +32,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.arbdev.sapay.ui.components.InAppNotificationBanner
 import com.arbdev.sapay.ui.components.InAppNotificationData
+import com.arbdev.sapay.ui.components.NotificationPermissionDialog
 import com.arbdev.sapay.ui.components.NotificationType
+import com.arbdev.sapay.ui.util.StatusBarNotificationUtil
 import com.arbdev.sapay.ui.theme.*
 import com.arbdev.sapay.ui.viewmodel.AuthViewModel
 import com.arbdev.sapay.ui.viewmodel.BillingViewModel
@@ -63,11 +69,80 @@ fun MainScreen(
 
     var currentNotification by remember { mutableStateOf<InAppNotificationData?>(null) }
 
+    var hasNotificationPermission by remember {
+        mutableStateOf(StatusBarNotificationUtil.hasNotificationPermission(context))
+    }
+    var showPermissionDialog by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasNotificationPermission = isGranted
+        if (isGranted) {
+            currentNotification = InAppNotificationData(
+                message = "Izin notifikasi status bar berhasil diaktifkan!",
+                type = NotificationType.SUCCESS
+            )
+        }
+    }
+
+    // Munculkan dialog izin saat pertama kali di-install / jika izin belum diaktifkan
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+            showPermissionDialog = true
+        }
+    }
+
     // Always automatically check for update & reload fresh banners on app resume
     LifecycleResumeEffect(Unit) {
         updateViewModel.checkForUpdate(manual = false)
         billingViewModel.loadBanners()
+        hasNotificationPermission = StatusBarNotificationUtil.hasNotificationPermission(context)
         onPauseOrDispose { }
+    }
+
+    // Notifikasi status bar pengingat tagihan untuk akun pengguna yang sudah terdaftar / login
+    LaunchedEffect(authState.billHistory, authState.profile, hasNotificationPermission) {
+        if (hasNotificationPermission) {
+            val unpaidBill = authState.billHistory.firstOrNull { it.isPaid == false }
+            if (unpaidBill != null) {
+                val customerName = authState.profile?.name ?: "Pelanggan Starlite"
+                val customerId = authState.profile?.customerId ?: authState.phoneInput
+                val packageName = unpaidBill.regionalPackage?.packageInfo?.name ?: unpaidBill.regionalPackage?.name ?: "Paket Internet WiFi"
+                val amount = unpaidBill.amount ?: unpaidBill.regionalPackage?.price ?: 0.0
+                val dueDate = formatIndonesianDate(unpaidBill.dueDate, withTime = false)
+
+                StatusBarNotificationUtil.showBillDueNotification(
+                    context = context,
+                    customerName = customerName,
+                    customerId = customerId,
+                    amount = amount,
+                    dueDate = dueDate,
+                    packageName = packageName
+                )
+            }
+        }
+    }
+
+    // Notifikasi status bar saat ada transaksi menunggu pembayaran (QRIS / VA)
+    LaunchedEffect(billingState.currentPayment, billingState.isPaymentSuccess, hasNotificationPermission) {
+        val p = billingState.currentPayment
+        if (hasNotificationPermission && p != null && !billingState.isPaymentSuccess && p.paymentStatus != "settle") {
+            StatusBarNotificationUtil.showPendingPaymentNotification(
+                context = context,
+                customerName = billingState.customerInfo?.name ?: "Pelanggan Starlite",
+                trxCode = p.trxCode ?: "-",
+                amount = p.grandTotal ?: 0.0,
+                paymentMethod = p.paymentMethod ?: "Online"
+            )
+        }
+    }
+
+    // Hapus notifikasi status bar jika tagihan sudah berhasil dibayar / lunas
+    LaunchedEffect(billingState.isPaymentSuccess) {
+        if (billingState.isPaymentSuccess) {
+            StatusBarNotificationUtil.clearBillNotification(context)
+        }
     }
 
     LaunchedEffect(updateState.infoMessage) {
@@ -231,6 +306,14 @@ fun MainScreen(
                         onSaveStoreConfig = billingViewModel::saveStoreConfig,
                         onShowNotification = { msg, type ->
                             currentNotification = InAppNotificationData(message = msg, type = type)
+                        },
+                        hasNotificationPermission = hasNotificationPermission,
+                        onRequestNotificationPermission = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                showPermissionDialog = true
+                            }
                         }
                     )
                 }
@@ -282,6 +365,18 @@ fun MainScreen(
             downloadError = updateState.downloadError,
             onDismiss = { updateViewModel.showChangelog(false) },
             onUpdateClick = { updateViewModel.startDownloadAndInstall(context) }
+        )
+    }
+
+    // Modal Dialog Permintaan Izin Notifikasi Status Bar
+    if (showPermissionDialog) {
+        NotificationPermissionDialog(
+            onDismiss = { showPermissionDialog = false },
+            onRequestPermission = {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
         )
     }
 }
